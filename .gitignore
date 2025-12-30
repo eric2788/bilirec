@@ -1,0 +1,7 @@
+**/secrets/*
+**/records/*
+/docs/*
+
+*.mp4
+*.flv
+*.ts
