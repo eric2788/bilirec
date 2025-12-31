@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"hash"
+	"hash/fnv"
 	"io"
 	"math"
 	"sync"
@@ -32,13 +34,18 @@ const (
 	TagHeaderSize     = 11
 	FlvHeaderSize     = 9
 	PrevTagSizeBytes  = 4
+
+	// 🔥 新增: 去重相關常量
+	MaxDedupCacheSize = 1000 // 最大去重緩存大小
+	DedupWindowMs     = 5000 // 去重時間窗口 (毫秒)
 )
 
 var (
 	FlvHeader = []byte{'F', 'L', 'V', 0x01, 0x05, 0x00, 0x00, 0x00, 0x09}
 
-	ErrNotFlvFile = errors.New("not a valid FLV file")
-	ErrInvalidTag = errors.New("invalid FLV tag")
+	ErrNotFlvFile      = errors.New("not a valid FLV file")
+	ErrInvalidTag      = errors.New("invalid FLV tag")
+	ErrBufferCorrupted = errors.New("buffer corruption detected")
 
 	// 🔥 優化: sync.Pool 用於復用 buffer 和對象
 	byteBufferPool = sync.Pool{
@@ -55,6 +62,13 @@ var (
 
 	headerBytesPool = pool.NewBufferPool(TagHeaderSize)
 	smallBytesPool  = pool.NewBufferPool(PrevTagSizeBytes)
+
+	// 🔥 新增: hash 計算器池
+	hasherPool = sync.Pool{
+		New: func() any {
+			return fnv.New64a()
+		},
+	}
 )
 
 // Tag represents a complete FLV tag
@@ -92,6 +106,166 @@ func (ts *TimestampStore) Reset() {
 	ts.LastOriginal = 0
 	ts.CurrentOffset = 0
 	ts.NextTimestampTarget = 0
+}
+
+// 🔥 新增: 去重記錄結構
+type TagSignature struct {
+	Hash      uint64
+	Timestamp int32
+	Type      byte
+	DataSize  uint32
+}
+
+// 🔥 新增: 去重緩存管理器
+type DedupCache struct {
+	mu         sync.Mutex
+	signatures map[uint64]*TagSignature // hash -> signature
+	order      []uint64                 // 用於 FIFO 清理
+	maxSize    int
+	windowMs   int32
+}
+
+func NewDedupCache(maxSize int, windowMs int32) *DedupCache {
+	return &DedupCache{
+		signatures: make(map[uint64]*TagSignature, maxSize),
+		order:      make([]uint64, 0, maxSize),
+		maxSize:    maxSize,
+		windowMs:   windowMs,
+	}
+}
+
+// 計算 Tag 的唯一簽名
+func (dc *DedupCache) computeSignature(tag *Tag) uint64 {
+	hasher := hasherPool.Get().(hash.Hash64)
+	defer func() {
+		hasher.Reset()
+		hasherPool.Put(hasher)
+	}()
+
+	// 組合:  Type + Timestamp + DataSize + Data(前32字節)
+	hasher.Write([]byte{tag.Type})
+
+	tsBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(tsBytes, uint32(tag.Timestamp))
+	hasher.Write(tsBytes)
+
+	sizeBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(sizeBytes, tag.DataSize)
+	hasher.Write(sizeBytes)
+
+	// 只用前32字節數據計算hash (平衡性能和準確性)
+	dataLen := len(tag.Data)
+	if dataLen > 32 {
+		dataLen = 32
+	}
+	if dataLen > 0 {
+		hasher.Write(tag.Data[:dataLen])
+	}
+
+	return hasher.Sum64()
+}
+
+// 檢查是否為重複 Tag
+func (dc *DedupCache) IsDuplicate(tag *Tag) bool {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
+	hash := dc.computeSignature(tag)
+
+	// 檢查是否存在相同簽名
+	if existing, found := dc.signatures[hash]; found {
+		// 檢查時間窗口
+		timeDiff := tag.Timestamp - existing.Timestamp
+		if timeDiff < 0 {
+			timeDiff = -timeDiff
+		}
+
+		// 如果在時間窗口內且類型、大小都匹配，判定為重複
+		if timeDiff <= dc.windowMs &&
+			existing.Type == tag.Type &&
+			existing.DataSize == tag.DataSize {
+			return true
+		}
+	}
+
+	// 添加到緩存
+	dc.add(hash, &TagSignature{
+		Hash:      hash,
+		Timestamp: tag.Timestamp,
+		Type:      tag.Type,
+		DataSize:  tag.DataSize,
+	})
+
+	return false
+}
+
+// 添加簽名到緩存 (內部方法，已加鎖)
+func (dc *DedupCache) add(hash uint64, sig *TagSignature) {
+	// 如果已存在，更新時間戳
+	if _, found := dc.signatures[hash]; found {
+		dc.signatures[hash] = sig
+		return
+	}
+
+	// 檢查緩存大小，執行 FIFO 清理
+	if len(dc.signatures) >= dc.maxSize {
+		// 移除最舊的 10%
+		removeCount := dc.maxSize / 10
+		if removeCount < 1 {
+			removeCount = 1
+		}
+
+		for i := 0; i < removeCount && len(dc.order) > 0; i++ {
+			oldHash := dc.order[0]
+			delete(dc.signatures, oldHash)
+			dc.order = dc.order[1:]
+		}
+	}
+
+	// 添加新記錄
+	dc.signatures[hash] = sig
+	dc.order = append(dc.order, hash)
+}
+
+// 清理過期記錄 (基於時間窗口)
+func (dc *DedupCache) CleanOld(currentTimestamp int32) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
+	validHashes := make([]uint64, 0, len(dc.order))
+
+	for _, hash := range dc.order {
+		sig := dc.signatures[hash]
+		timeDiff := currentTimestamp - sig.Timestamp
+		if timeDiff < 0 {
+			timeDiff = -timeDiff
+		}
+
+		// 保留在窗口內的記錄
+		if timeDiff <= dc.windowMs*2 { // 保留2倍窗口以容錯
+			validHashes = append(validHashes, hash)
+		} else {
+			delete(dc.signatures, hash)
+		}
+	}
+
+	dc.order = validHashes
+}
+
+// 重置緩存
+func (dc *DedupCache) Reset() {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+
+	dc.signatures = make(map[uint64]*TagSignature, dc.maxSize)
+	dc.order = make([]uint64, 0, dc.maxSize)
+}
+
+// 獲取統計信息
+func (dc *DedupCache) GetStats() (size int, capacity int) {
+	dc.mu.Lock()
+	defer dc.mu.Unlock()
+	return len(dc.signatures), dc.maxSize
 }
 
 // =====================================================

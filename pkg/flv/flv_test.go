@@ -84,6 +84,9 @@ func TestRealtimeFixer(t *testing.T) {
 		ratio := float64(totalWritten) / float64(totalRead) * 100
 		t.Logf("📈 Size ratio: %.2f%% (output/input)", ratio)
 	}
+
+	dups, size, capacity := realtimeFixer.GetDedupStats()
+	t.Logf("🗂️ Dedup Stats: %d duplicates detected, cache size: %d/%d", dups, size, capacity)
 }
 
 func TestAccumulateFix(t *testing.T) {
@@ -156,7 +159,7 @@ func TestAccumulateFix(t *testing.T) {
 	}()
 
 	// 發送文件數據
-	sendFile(t, "original2.flv", inputChannel2)
+	sendFile(t, "original.flv", inputChannel2)
 
 	// 等待處理完成
 	<-done
@@ -172,6 +175,9 @@ func TestAccumulateFix(t *testing.T) {
 	} else {
 		t.Logf("✅ Output file size: %d bytes", stat.Size())
 	}
+
+	dups, size, capacity := accFixer.GetDedupStats()
+	t.Logf("🗂️ Dedup Stats: %d duplicates detected, cache size: %d/%d", dups, size, capacity)
 }
 func sendFile(t *testing.T, file string, ch chan<- []byte) {
 	f, err := os.Open(file)

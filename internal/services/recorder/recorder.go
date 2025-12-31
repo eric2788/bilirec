@@ -24,7 +24,7 @@ const Recording RecordStatus = "recording"
 const Recovering RecordStatus = "recovering"
 const Idle RecordStatus = "idle"
 
-var idlePtr *RecordStatus = utils.Ptr(Idle)
+//var idlePtr *RecordStatus = utils.Ptr(Idle)
 var recordingPtr *RecordStatus = utils.Ptr(Recording)
 var recoveringPtr *RecordStatus = utils.Ptr(Recovering)
 
@@ -102,18 +102,7 @@ func (r *Service) Start(roomId int64) error {
 		return ErrEmptyStreamURLs
 	}
 
-	pipe, err := r.newPipeline(roomId)
-	if err != nil {
-		return fmt.Errorf("cannot create writer: %v", err)
-	}
-
 	ctx, cancel := context.WithCancel(r.ctx)
-	info := &Recorder{
-		cancel:         cancel,
-		recoveredCount: xsync.NewCounter(),
-		startTime:      time.Now(),
-	}
-	info.status.Store(recordingPtr)
 
 	// retry mechanism
 	for _, url := range urls {
@@ -128,19 +117,9 @@ func (r *Service) Start(roomId int64) error {
 			continue
 		}
 
-		if err := pipe.Open(r.ctx); err != nil {
-			return fmt.Errorf("cannot open pipeline: %v", err)
-		}
-
-		r.recording.Store(roomId, info)
-		r.pipes.Store(roomId, pipe)
-
-		go r.rev(roomId, ch, info, pipe)
-		go r.checkRecordingDurationPeriodically(roomId, ctx)
-		return nil
+		return r.prepare(roomId, ch, ctx, cancel)
 	}
 	cancel()
-	pipe.Close()
 	l.Warn("no more url left")
 	return ErrStreamURLsUnreachable
 }
@@ -155,19 +134,53 @@ func (r *Service) Stop(roomId int64) bool {
 	} else {
 		logger.Warnf("recording for room %d not found", roomId)
 	}
-	if hasPipe {
+
+	if hasPipe && !hasRecording {
+		logger.Warnf("found orphaned pipe from room %d, closing it...", roomId)
 		pipe.Close()
-	} else {
-		logger.Warnf("writer for room %d not found", roomId)
 	}
 
-	return hasRecording || hasPipe
+	return hasRecording
+}
+
+func (r *Service) prepare(roomId int64, ch <-chan []byte, ctx context.Context, cancel context.CancelFunc) error {
+
+	// initialize Recorder info
+	info := &Recorder{
+		cancel:         cancel,
+		recoveredCount: xsync.NewCounter(),
+		startTime:      time.Now(),
+	}
+	info.status.Store(recordingPtr)
+
+	// initialize pipeline
+	pipe, err := r.newStreamPipeline(roomId, info)
+	if err != nil {
+		return fmt.Errorf("cannot create pipeline: %v", err)
+	}
+
+	startCtx, startCancel := context.WithTimeout(ctx, 10*time.Second)
+	if err := pipe.Open(startCtx); err != nil {
+		startCancel()
+		return fmt.Errorf("cannot open pipeline: %v", err)
+	}
+	startCancel()
+
+	r.recording.Store(roomId, info)
+	r.pipes.Store(roomId, pipe)
+
+	go r.rev(roomId, ch, info, pipe)
+	go r.checkRecordingDurationPeriodically(roomId, ctx)
+	return nil
 }
 
 func (r *Service) rev(roomId int64, ch <-chan []byte, info *Recorder, pipe *pipeline.Pipe[[]byte]) {
 	l := logger.WithField("room", roomId)
 	defer r.recover(roomId)
-	defer pipe.Close()
+	defer func() {
+		pipe.Close()
+		go r.finalize(roomId, info)
+	}()
 	for data := range ch {
 
 		info.bytesRead.Add(uint64(len(data)))
@@ -176,13 +189,13 @@ func (r *Service) rev(roomId int64, ch <-chan []byte, info *Recorder, pipe *pipe
 
 		if err != nil {
 			l.Errorf("error writing data to file: %v", err)
-			r.Stop(roomId)
 			return
 		}
 	}
 }
 
 func (r *Service) checkRecordingDurationPeriodically(roomId int64, ctx context.Context) {
+	log := logger.WithField("room", roomId)
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 	maxDuration := time.Duration(r.cfg.MaxRecordingHours) * time.Hour
@@ -195,22 +208,14 @@ func (r *Service) checkRecordingDurationPeriodically(roomId int64, ctx context.C
 			}
 			elapsed := time.Since(info.startTime)
 			if elapsed >= maxDuration {
-				logger.
-					WithField("room", roomId).
-					Infof("maximum recording hours reached (%v), stopping", elapsed.Round(time.Minute))
-
+				log.Infof("maximum recording hours reached (%v), stopping", elapsed.Round(time.Minute))
 				r.Stop(roomId)
 				return
 			}
 
 			if int(elapsed.Minutes())%30 == 0 {
 				remaining := maxDuration - elapsed
-				logger.
-					WithField("room", roomId).
-					Infof("recording: %v elapsed, %v remaining, %d MB",
-						elapsed.Round(time.Minute),
-						remaining.Round(time.Minute),
-						info.bytesRead.Load()/1024/1024)
+				log.Infof("recording: %v elapsed, %v remaining, %d MB", elapsed.Round(time.Minute), remaining.Round(time.Minute), info.bytesRead.Load()/1024/1024)
 			}
 
 		case <-ctx.Done():
@@ -262,4 +267,32 @@ func (r *Service) recover(roomId int64) {
 		return
 	}
 	l.Info("start live stream recovery: success")
+}
+
+func (r *Service) finalize(roomId int64, info *Recorder) {
+	if info == nil {
+		logger.Warnf("skipping finalize for room %d: no recording info", roomId)
+		return
+	}
+	finalPipe, err := r.newFinalPipeline()
+	if err != nil {
+		logger.Errorf("cannot create final pipeline for room %d: %v", roomId, err)
+		return
+	}
+	if err := finalPipe.Open(r.ctx); err != nil {
+		logger.Errorf("cannot open final pipeline for room %d: %v", roomId, err)
+		return
+	}
+	defer finalPipe.Close()
+
+	logger.Infof("finalize info: %v", info)
+
+	dirPath := fmt.Sprintf("%s/%d", r.cfg.OutputDir, roomId)
+	filename := fmt.Sprintf("%s/%d.flv", dirPath, info.startTime.Unix())
+	output, err := finalPipe.Process(r.ctx, filename)
+	if err != nil {
+		logger.Errorf("cannot process final pipeline for room %d: %v", roomId, err)
+		return
+	}
+	logger.Infof("finalized recording for room %d: %s", roomId, output)
 }

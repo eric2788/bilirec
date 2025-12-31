@@ -2,7 +2,6 @@ package flv
 
 import (
 	"bytes"
-	"errors"
 	"sync"
 )
 
@@ -21,6 +20,10 @@ type AccumulateFixer struct {
 	// 🔥 優化: 預分配 tag slice
 	tagCache     []*Tag
 	tagCacheSize int
+
+	// 🔥 新增: 去重支持
+	dedupCache *DedupCache
+	dupCount   int64
 }
 
 func NewAccumulateFixer(chunkSizeMB int) *AccumulateFixer {
@@ -35,7 +38,18 @@ func NewAccumulateFixer(chunkSizeMB int) *AccumulateFixer {
 		headerWritten:  false,
 		tagCache:       make([]*Tag, 0, estimatedTags),
 		tagCacheSize:   estimatedTags,
+		dedupCache:     NewDedupCache(MaxDedupCacheSize, DedupWindowMs), // 🔥 初始化去重
+		dupCount:       0,
 	}
+}
+
+// 🔥 新增: 獲取去重統計
+func (af *AccumulateFixer) GetDedupStats() (duplicates int64, cacheSize int, cacheCapacity int) {
+	af.mu.Lock()
+	defer af.mu.Unlock()
+
+	size, capacity := af.dedupCache.GetStats()
+	return af.dupCount, size, capacity
 }
 
 // Accumulate adds data and returns true if ready to flush
@@ -82,6 +96,10 @@ func (af *AccumulateFixer) Close() {
 		}
 	}
 	af.tagCache = nil
+
+	if af.dedupCache != nil {
+		af.dedupCache.Reset()
+	}
 }
 
 func (af *AccumulateFixer) flushInternal() ([]byte, error) {
@@ -184,6 +202,15 @@ func (af *AccumulateFixer) flushInternal() ([]byte, error) {
 			}
 		}
 
+		// 🔥 新增:  去重檢查
+		if af.dedupCache.IsDuplicate(tag) {
+			af.dupCount++
+			tagPool.Put(tag)
+			headerBytesPool.PutBuffer(headerBytes)
+			smallBytesPool.PutBuffer(prevTagSizeBytes)
+			continue // 跳過重複的 tag
+		}
+
 		tags = append(tags, tag)
 
 		headerBytesPool.PutBuffer(headerBytes)
@@ -191,7 +218,7 @@ func (af *AccumulateFixer) flushInternal() ([]byte, error) {
 
 		// Safety check
 		if af.buffer.Len() > startLen {
-			return nil, errors.New("buffer corruption detected")
+			return nil, ErrBufferCorrupted
 		}
 	}
 
@@ -206,6 +233,12 @@ func (af *AccumulateFixer) flushInternal() ([]byte, error) {
 	}
 
 	af.totalProcessed += int64(output.Len())
+
+	// 🔥 新增: 定期清理過期去重記錄
+	if len(tags) > 0 {
+		lastTimestamp := tags[len(tags)-1].Timestamp
+		af.dedupCache.CleanOld(lastTimestamp)
+	}
 
 	// 🔥 優化: 保存 tag cache 供下次使用
 	af.tagCache = tags

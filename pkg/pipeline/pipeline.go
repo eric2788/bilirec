@@ -13,7 +13,7 @@ type Pipe[T any] struct {
 	processors []*ProcessorInfo[T]
 }
 
-func NewPipeline[T any](processors ...*ProcessorInfo[T]) *Pipe[T] {
+func New[T any](processors ...*ProcessorInfo[T]) *Pipe[T] {
 	return &Pipe[T]{
 		processors: processors,
 	}

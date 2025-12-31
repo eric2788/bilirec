@@ -15,6 +15,8 @@ type RealtimeFixer struct {
 	buffer        *bytes.Buffer
 	headerWritten bool
 	pendingTags   []*Tag
+	dedupCache    *DedupCache // 🔥 新增:  去重緩存
+	dupCount      int64       // 🔥 新增: 重複計數
 }
 
 func NewRealtimeFixer() *RealtimeFixer {
@@ -23,7 +25,18 @@ func NewRealtimeFixer() *RealtimeFixer {
 		buffer:        byteBufferPool.Get().(*bytes.Buffer), // 🔥 優化: 從 pool 取得
 		headerWritten: false,
 		pendingTags:   make([]*Tag, 0, 32),
+		dedupCache:    NewDedupCache(MaxDedupCacheSize, DedupWindowMs), // 🔥 初始化去重
+		dupCount:      0,
 	}
+}
+
+// 🔥 新增: 獲取去重統計
+func (rf *RealtimeFixer) GetDedupStats() (duplicates int64, cacheSize int, cacheCapacity int) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+
+	size, capacity := rf.dedupCache.GetStats()
+	return rf.dupCount, size, capacity
 }
 
 // Fix processes incoming bytes and returns fixed FLV data
@@ -133,6 +146,13 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 			}
 		}
 
+		// 🔥 新增: 去重檢查 (在修復時間戳之前)
+		if rf.dedupCache.IsDuplicate(tag) {
+			rf.dupCount++
+			tagPool.Put(tag)
+			continue // 跳過重複的 tag
+		}
+
 		// Fix timestamp
 		rf.fixTimestamp(tag)
 
@@ -143,6 +163,11 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 
 		// 🔥 優化:  返還 tag 到 pool (但保留 Data 因為已經寫入)
 		tagPool.Put(tag)
+	}
+
+	// 🔥 新增: 定期清理過期去重記錄
+	if rf.tsStore.LastOriginal > 0 {
+		rf.dedupCache.CleanOld(rf.tsStore.LastOriginal)
 	}
 
 	// 🔥 優化:  返回複製的數據，這樣 output buffer 可以被復用
@@ -164,6 +189,10 @@ func (rf *RealtimeFixer) Close() {
 		rf.buffer.Reset()
 		byteBufferPool.Put(rf.buffer)
 		rf.buffer = nil
+	}
+
+	if rf.dedupCache != nil {
+		rf.dedupCache.Reset()
 	}
 }
 
