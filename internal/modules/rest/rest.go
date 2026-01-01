@@ -1,12 +1,23 @@
 // @title BiliRec API
 // @version 1.0
-// @description BiliRec REST API
+// @description Bilibili Live Recording Service API
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://github.com/eric2788/bilirec
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description Type "Bearer <token>" in the Authorization header
+
+// @host 192.168.0.127:2356
+// @BasePath /
+// @schemes http https
 //
-//go:generate swag init -g auth.go -o ../../docs
+//go:generate swag init -g rest.go -o ../../docs
 package rest
 
 import (
@@ -33,7 +44,10 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 	app := fiber.New()
 
 	app.Use(recover.New())
-	app.Use(logging.New())
+	app.Use(logging.New(logging.Config{
+		Format: "| ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error}\n",
+		Output: logger.Writer(),
+	}))
 	app.Use(swagger.New(swagger.Config{
 		BasePath: "/",
 		FilePath: "./docs/swagger.json",

@@ -4,7 +4,9 @@ WORKDIR /app
 COPY . .
 
 RUN apk add --no-cache tzdata
-RUN go run github.com/swaggo/swag/cmd/swag@latest init
+RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12 \
+ && export PATH=$PATH:$(go env GOPATH)/bin \
+ && swag init -g internal/modules/rest/rest.go -o docs
 RUN go mod download
 RUN go mod tidy
 RUN go build -v -o bilirec

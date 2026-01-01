@@ -17,21 +17,6 @@ import (
 	"go.uber.org/fx"
 )
 
-// @title BiliRec API
-// @version 1.0
-// @description Bilibili Live Recording Service API
-// @termsOfService http://swagger.io/terms/
-
-// @contact.name API Support
-// @contact.url http://github.com/eric2788/bilirec
-
-// @license.name MIT
-// @license.url https://opensource.org/licenses/MIT
-
-// @host localhost:8080
-// @BasePath /
-// @schemes http https
-
 func main() {
 
 	app := fx.New(

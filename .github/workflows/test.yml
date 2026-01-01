@@ -17,8 +17,14 @@ jobs:
       with:
         go-version: '1.24'
 
-    - name: Generate Swagger
-      run: go run github.com/swaggo/swag/cmd/swag@latest init
+    - name: Install swag
+      run: go install github.com/swaggo/swag/cmd/swag@v1.8.12
+
+    - name: Add GOPATH bin to PATH
+      run: echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+    - name: Generate swagger docs
+      run: swag init -g internal/modules/rest/rest.go -o docs
 
     - name: Tidy modules
       run: go mod tidy
