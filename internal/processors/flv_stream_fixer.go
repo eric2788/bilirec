@@ -10,6 +10,7 @@ import (
 
 type FlvStreamFixerProcessor struct {
 	fixer *flv.RealtimeFixer
+	log   *logrus.Entry
 }
 
 func NewFlvStreamFixer() *pipeline.ProcessorInfo[[]byte] {
@@ -23,6 +24,7 @@ func NewFlvStreamFixer() *pipeline.ProcessorInfo[[]byte] {
 }
 
 func (p *FlvStreamFixerProcessor) Open(ctx context.Context, log *logrus.Entry) error {
+	p.log = log
 	return nil
 }
 
@@ -31,6 +33,8 @@ func (p *FlvStreamFixerProcessor) Process(ctx context.Context, log *logrus.Entry
 }
 
 func (p *FlvStreamFixerProcessor) Close() error {
-	p.fixer.Close()
+	defer p.fixer.Close()
+	dups, size, capacity := p.fixer.GetDedupStats()
+	p.log.Infof("🗂️ Dedup Stats: %d duplicates detected, cache size: %d/%d", dups, size, capacity)
 	return nil
 }
