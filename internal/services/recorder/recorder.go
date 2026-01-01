@@ -24,7 +24,7 @@ const Recording RecordStatus = "recording"
 const Recovering RecordStatus = "recovering"
 const Idle RecordStatus = "idle"
 
-//var idlePtr *RecordStatus = utils.Ptr(Idle)
+// var idlePtr *RecordStatus = utils.Ptr(Idle)
 var recordingPtr *RecordStatus = utils.Ptr(Recording)
 var recoveringPtr *RecordStatus = utils.Ptr(Recovering)
 
@@ -236,6 +236,7 @@ func (r *Service) recover(roomId int64) {
 		return
 	} else if info.recoveredCount.Value() >= int64(r.cfg.MaxRecoveryAttempts) {
 		l.Infof("maximum recovery attempts reached (%d), stopping recording", r.cfg.MaxRecoveryAttempts)
+		r.Stop(roomId)
 		return
 	}
 	info.recoveredCount.Inc()
@@ -258,8 +259,10 @@ func (r *Service) recover(roomId int64) {
 		switch err {
 		case ErrMaxRecordingHoursReached, ErrMaxConcurrentRecordingsReached:
 			l.Infof("stop recovery due to: %v", err)
+			r.Stop(roomId)
 		case ErrStreamNotLive:
 			l.Infof("stream is offline, will not recover.")
+			r.Stop(roomId)
 		default:
 			l.Infof("will retry stream recovery in 15 seconds...")
 			retry()
