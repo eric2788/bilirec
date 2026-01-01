@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"time"
+
 	"github.com/eric2788/bilirec/internal/controllers/file"
 	"github.com/eric2788/bilirec/internal/controllers/record"
 	"github.com/eric2788/bilirec/internal/controllers/room"
@@ -10,6 +13,7 @@ import (
 	f "github.com/eric2788/bilirec/internal/services/file"
 	"github.com/eric2788/bilirec/internal/services/recorder"
 	"github.com/eric2788/bilirec/internal/services/stream"
+	"github.com/eric2788/bilirec/utils"
 	"go.uber.org/fx"
 )
 
@@ -42,6 +46,8 @@ func main() {
 		fx.Invoke(room.NewController),
 		fx.Invoke(record.NewController),
 		fx.Invoke(file.NewController),
+
+		fx.StartTimeout(utils.Ternary(os.Getenv("ANONYMOUS_LOGIN") == "true", 15*time.Second, 1*time.Minute)),
 	)
 
 	app.Run()

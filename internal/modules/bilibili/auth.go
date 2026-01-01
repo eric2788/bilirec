@@ -111,7 +111,8 @@ func (c *Client) writerCookiesToFile() error {
 }
 
 func (c *Client) writeRefreshTokenToFile(refreshToken string) error {
-	if err := os.WriteFile(c.refreshToken, []byte(refreshToken), 0600); err != nil {
+	c.refreshToken = refreshToken
+	if err := os.WriteFile(c.refreshTokenPath, []byte(refreshToken), 0600); err != nil {
 		return fmt.Errorf("error writing refresh token file: %v", err)
 	}
 	return nil
