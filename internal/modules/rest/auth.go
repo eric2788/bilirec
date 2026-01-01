@@ -15,6 +15,20 @@ type loginRequest struct {
 	Pass string `json:"pass" form:"pass"`
 }
 
+type loginResponse struct {
+	Token string `json:"token"`
+}
+
+// Login
+// @Summary Login and get JWT token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param credentials body loginRequest true "Login credentials"
+// @Success 200 {object} loginResponse
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Router /login [post]
 func loginHandler(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 
@@ -43,6 +57,6 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 			return fiber.ErrInternalServerError
 		}
 
-		return c.JSON(fiber.Map{"token": t})
+		return c.JSON(loginResponse{Token: t})
 	}
 }

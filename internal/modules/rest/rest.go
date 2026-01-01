@@ -5,6 +5,8 @@
 // @in header
 // @name Authorization
 // @description Type "Bearer <token>" in the Authorization header
+//
+//go:generate swag init -g auth.go -o ../../docs
 package rest
 
 import (
