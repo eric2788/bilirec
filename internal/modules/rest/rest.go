@@ -31,8 +31,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.uber.org/fx"
 
-	"github.com/gofiber/contrib/swagger"
 	jwt "github.com/gofiber/contrib/v3/jwt"
+	"github.com/gofiber/contrib/v3/swagger"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/extractors"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
