@@ -3,7 +3,9 @@ package record
 import (
 	"strconv"
 
+	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/services/recorder"
+	"github.com/eric2788/bilirec/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 )
@@ -45,7 +47,11 @@ func (r *Controller) startRecording(ctx fiber.Ctx) error {
 	err = r.service.Start(roomId)
 	if err != nil {
 		logger.Errorf("error starting recording for room %d: %v", roomId, err)
-		return fiber.ErrInternalServerError
+		return utils.Ternary(
+			bilibili.IsErrRoomNotFound(err),
+			fiber.ErrNotFound,
+			fiber.ErrInternalServerError,
+		)
 	}
 	return ctx.SendStatus(200)
 }

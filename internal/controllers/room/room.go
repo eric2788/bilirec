@@ -5,6 +5,7 @@ import (
 
 	bili "github.com/CuteReimu/bilibili/v2"
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
+	"github.com/eric2788/bilirec/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 )
@@ -48,7 +49,11 @@ func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 
 	if err != nil {
 		logger.Errorf("error getting room info for room %d: %v", roomId, err)
-		return fiber.ErrInternalServerError
+		return utils.Ternary(
+			bilibili.IsErrRoomNotFound(err),
+			fiber.ErrNotFound,
+			fiber.ErrInternalServerError,
+		)
 	}
 
 	return ctx.JSON(res)
@@ -74,7 +79,11 @@ func (r *Controller) isStreamLiving(ctx fiber.Ctx) error {
 	isLive, err := r.bilic.IsStreamLiving(roomId)
 	if err != nil {
 		logger.Errorf("error checking stream living status for room %d: %v", roomId, err)
-		return fiber.ErrInternalServerError
+		return utils.Ternary(
+			bilibili.IsErrRoomNotFound(err),
+			fiber.ErrNotFound,
+			fiber.ErrInternalServerError,
+		)
 	}
 	return ctx.JSON(fiber.Map{
 		"roomID": roomId,

@@ -108,6 +108,9 @@ func (c *Client) GetStreamURLs(roomID int64) ([]string, error) {
 	if err := json.Unmarshal(resp.Body(), &sr); err != nil {
 		return nil, err
 	} else if sr.Code != 0 {
+		if sr.Code == 19002003 {
+			return nil, ErrRoomNotFound
+		}
 		return nil, fmt.Errorf("error getting stream url: %s (code %d)", sr.Message, sr.Code)
 	}
 
@@ -151,6 +154,9 @@ func (c *Client) GetStreamURLsV2(roomID int64) ([]string, error) {
 	if err := json.Unmarshal(resp.Body(), &sr); err != nil {
 		return nil, err
 	} else if sr.Code != 0 {
+		if sr.Code == 19002003 {
+			return nil, ErrRoomNotFound
+		}
 		return nil, fmt.Errorf("error getting stream url: %s (code %d)", sr.Message, sr.Code)
 	}
 

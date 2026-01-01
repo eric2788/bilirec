@@ -2,6 +2,7 @@ package bilibili
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -15,6 +16,10 @@ import (
 )
 
 var logger = logrus.WithField("module", "bilibili")
+
+var (
+	ErrRoomNotFound = errors.New("room not found")
+)
 
 type Client struct {
 	*bili.Client
