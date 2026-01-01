@@ -160,7 +160,7 @@ export SECRET_DIR=/path/to/data
 
 主要依赖库：
 
-- [github.com/gofiber/fiber/v2](https://github.com/gofiber/fiber) - Web 框架
+- [github.com/gofiber/fiber/v3](https://github.com/gofiber/fiber) - Web 框架
 - [github.com/CuteReimu/bilibili/v2](https://github.com/CuteReimu/bilibili) - Bilibili API 客户端
 - [go.uber.org/fx](https://github.com/uber-go/fx) - 依赖注入框架
 - [github.com/sirupsen/logrus](https://github.com/sirupsen/logrus) - 日志库

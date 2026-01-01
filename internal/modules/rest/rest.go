@@ -22,6 +22,7 @@ package rest
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	_ "github.com/eric2788/bilirec/docs"
@@ -30,12 +31,13 @@ import (
 	"github.com/sirupsen/logrus"
 	"go.uber.org/fx"
 
-	jwt "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/contrib/swagger"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
-	logging "github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/recover"
+	jwt "github.com/gofiber/contrib/v3/jwt"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/extractors"
+	"github.com/gofiber/fiber/v3/middleware/limiter"
+	logging "github.com/gofiber/fiber/v3/middleware/logger"
+	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
 var logger = logrus.WithField("module", "rest")
@@ -46,7 +48,7 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 	app.Use(recover.New())
 	app.Use(logging.New(logging.Config{
 		Format: "| ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error}\n",
-		Output: logger.Writer(),
+		Stream: logger.Writer(),
 	}))
 	app.Use(swagger.New(swagger.Config{
 		BasePath: "/",
@@ -63,6 +65,15 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 		)
 		app.Use(jwt.New(jwt.Config{
 			SigningKey: jwt.SigningKey{Key: []byte(cfg.JwtSecret)},
+			ErrorHandler: func(c fiber.Ctx, err error) error {
+				if errors.Is(err, extractors.ErrNotFound) {
+					return c.Status(fiber.StatusUnauthorized).SendString(jwt.ErrMissingToken.Error())
+				}
+				if e, ok := err.(*fiber.Error); ok {
+					return c.Status(e.Code).SendString(e.Message)
+				}
+				return c.Status(fiber.StatusUnauthorized).SendString("Invalid or expired JWT")
+			},
 		}))
 	}
 

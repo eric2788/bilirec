@@ -5,7 +5,7 @@ import (
 
 	bili "github.com/CuteReimu/bilibili/v2"
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -36,7 +36,7 @@ func NewController(app *fiber.App, bilic *bilibili.Client) *Controller {
 // @Failure 400 {string} string "Invalid room ID"
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/{roomID}/info [get]
-func (r *Controller) getRoomInfo(ctx *fiber.Ctx) error {
+func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int64: %v", err)
@@ -65,7 +65,7 @@ func (r *Controller) getRoomInfo(ctx *fiber.Ctx) error {
 // @Failure 400 {string} string "Invalid room ID"
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/{roomID}/live [get]
-func (r *Controller) isStreamLiving(ctx *fiber.Ctx) error {
+func (r *Controller) isStreamLiving(ctx fiber.Ctx) error {
 	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int64: %v", err)

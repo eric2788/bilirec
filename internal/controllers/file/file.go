@@ -4,7 +4,7 @@ import (
 	"os"
 
 	"github.com/eric2788/bilirec/internal/services/file"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,7 +24,7 @@ func NewController(app *fiber.App, fileSvc *file.Service) *Controller {
 	return fc
 }
 
-func (c *Controller) listFiles(ctx *fiber.Ctx) error {
+func (c *Controller) listFiles(ctx fiber.Ctx) error {
 	path := ctx.Params("*", "/")
 	trees, err := c.fileSvc.ListTree(path)
 	if err != nil {
@@ -34,7 +34,7 @@ func (c *Controller) listFiles(ctx *fiber.Ctx) error {
 	return ctx.JSON(trees)
 }
 
-func (c *Controller) downloadFile(ctx *fiber.Ctx) error {
+func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	path := ctx.Params("*", "/")
 	f, err := c.fileSvc.GetFileStream(path)
 	if err != nil {

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/eric2788/bilirec/internal/modules/config"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -30,10 +30,10 @@ type loginResponse struct {
 // @Failure 401 {object} string
 // @Router /login [post]
 func loginHandler(cfg *config.Config) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 
 		var req loginRequest
-		if err := c.BodyParser(&req); err != nil {
+		if err := c.Bind().All(&req); err != nil {
 			return fiber.ErrBadRequest
 		}
 

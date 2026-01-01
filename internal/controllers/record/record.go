@@ -4,7 +4,7 @@ import (
 	"strconv"
 
 	"github.com/eric2788/bilirec/internal/services/recorder"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -36,7 +36,7 @@ func NewController(app *fiber.App, service *recorder.Service) *Controller {
 // @Failure 400 {string} string "Invalid room ID"
 // @Failure 500 {string} string "Internal server error"
 // @Router /record/{roomID}/start [post]
-func (r *Controller) startRecording(ctx *fiber.Ctx) error {
+func (r *Controller) startRecording(ctx fiber.Ctx) error {
 	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int64: %v", err)
@@ -60,7 +60,7 @@ func (r *Controller) startRecording(ctx *fiber.Ctx) error {
 // @Success 200 {object} map[string]interface{} "Recording stopped"
 // @Failure 400 {string} string "Invalid room ID"
 // @Router /record/{roomID}/stop [post]
-func (r *Controller) stopRecording(ctx *fiber.Ctx) error {
+func (r *Controller) stopRecording(ctx fiber.Ctx) error {
 	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int64: %v", err)
@@ -83,7 +83,7 @@ func (r *Controller) stopRecording(ctx *fiber.Ctx) error {
 // @Success 200 {object} map[string]interface{} "Recording status"
 // @Failure 400 {string} string "Invalid room ID"
 // @Router /record/{roomID}/status [get]
-func (r *Controller) getRecordingStatus(ctx *fiber.Ctx) error {
+func (r *Controller) getRecordingStatus(ctx fiber.Ctx) error {
 	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int64: %v", err)
@@ -107,7 +107,7 @@ func (r *Controller) getRecordingStatus(ctx *fiber.Ctx) error {
 // @Failure 400 {string} string "Invalid room ID"
 // @Failure 404 {string} string "Recording not found"
 // @Router /record/{roomID}/stats [get]
-func (r *Controller) getRecordingStats(ctx *fiber.Ctx) error {
+func (r *Controller) getRecordingStats(ctx fiber.Ctx) error {
 	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int64: %v", err)
@@ -128,7 +128,7 @@ func (r *Controller) getRecordingStats(ctx *fiber.Ctx) error {
 // @Produce json
 // @Success 200 {array} int64 "List of room IDs"
 // @Router /record/list [get]
-func (r *Controller) listRecordings(ctx *fiber.Ctx) error {
+func (r *Controller) listRecordings(ctx fiber.Ctx) error {
 	roomIds := r.service.ListRecording()
 	return ctx.JSON(roomIds)
 }
