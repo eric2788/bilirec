@@ -67,3 +67,5 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/arm64/v8, linux/amd64
+          cache-from: type=registry,ref=docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.artifact_name }}:cache
+          cache-to: type=registry,ref=docker.io/${{ secrets.DOCKER_USERNAME }}/${{ env.artifact_name }}:cache,mode=max

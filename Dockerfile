@@ -1,15 +1,28 @@
 FROM golang:1.25-alpine AS build
 
 WORKDIR /app
-COPY . .
 
 RUN apk add --no-cache tzdata
-RUN go install github.com/swaggo/swag/cmd/swag@latest \
- && export PATH=$PATH:$(go env GOPATH)/bin \
- && swag init -g internal/modules/rest/rest.go -o docs
-RUN go mod download
-RUN go mod tidy
-RUN go build -v -o bilirec
+
+ENV GOMODCACHE=/gomod-cache
+ENV GOCACHE=/go-cache
+
+COPY go.mod go.sum ./
+
+RUN --mount=type=cache,target=/gomod-cache \
+    go mod download
+
+COPY . .
+
+RUN go install github.com/swaggo/swag/cmd/swag@latest
+
+RUN --mount=type=cache,target=/gomod-cache \
+    --mount=type=cache,target=/go-cache \
+    $(go env GOPATH)/bin/swag init -g internal/modules/rest/rest.go -o docs
+
+RUN --mount=type=cache,target=/gomod-cache \
+    --mount=type=cache,target=/go-cache \
+    go build -v -o bilirec
 
 FROM alpine:latest
 WORKDIR /app
