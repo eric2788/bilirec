@@ -17,6 +17,10 @@ type BufferedStreamWriterProcessor struct {
 	path   string
 	writer *bufio.Writer
 	logger *logrus.Entry
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	wait   sync.WaitGroup
 }
 
 func NewBufferedStreamWriter(path string) *pipeline.ProcessorInfo[[]byte] {
@@ -37,7 +41,9 @@ func (w *BufferedStreamWriterProcessor) Open(ctx context.Context, log *logrus.En
 	w.file = file
 	w.writer = bufio.NewWriterSize(file, 4*1024*1024) // 4 MB buffer
 	w.logger = log.WithField("file", file.Name())
-	go w.flushPeriodically(ctx)
+	w.ctx, w.cancel = context.WithCancel(context.Background())
+	w.wait.Add(1)
+	go w.flushPeriodically(w.ctx)
 	return nil
 }
 
@@ -49,6 +55,8 @@ func (w *BufferedStreamWriterProcessor) Process(ctx context.Context, log *logrus
 }
 
 func (w *BufferedStreamWriterProcessor) Close() error {
+	w.cancel()
+	w.wait.Wait()
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if err := w.writer.Flush(); err != nil {
@@ -59,6 +67,7 @@ func (w *BufferedStreamWriterProcessor) Close() error {
 
 func (w *BufferedStreamWriterProcessor) flushPeriodically(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
+	defer w.wait.Done()
 	defer ticker.Stop()
 	for {
 		select {

@@ -20,7 +20,7 @@ func NewService() *Service {
 }
 
 func (r *Service) ReadStream(resp *resty.Response, ctx context.Context) (<-chan []byte, error) {
-	ch := make(chan []byte, 50) // 50 MB buffer
+	ch := make(chan []byte, 10) // 10 MB buffer
 	go r.read(ch, resp.RawBody(), ctx)
 	return ch, nil
 }
@@ -49,7 +49,12 @@ func (r *Service) read(ch chan<- []byte, stream io.ReadCloser, ctx context.Conte
 				return
 			}
 			if n > 0 {
-				ch <- buf[:n]
+				select {
+				case ch <- buf[:n]:
+				case <-ctx.Done():
+					r.Flush(buf)
+					return
+				}
 			} else {
 				r.Flush(buf)
 			}

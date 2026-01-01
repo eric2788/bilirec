@@ -37,6 +37,7 @@ import (
 	"github.com/gofiber/fiber/v3/extractors"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	logging "github.com/gofiber/fiber/v3/middleware/logger"
+	"github.com/gofiber/fiber/v3/middleware/pprof"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
@@ -46,6 +47,7 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 	app := fiber.New()
 
 	app.Use(recover.New())
+	app.Use(pprof.New())
 	app.Use(logging.New(logging.Config{
 		Format: "| ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error}\n",
 		Stream: logger.Writer(),

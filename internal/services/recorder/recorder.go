@@ -287,9 +287,6 @@ func (r *Service) finalize(roomId int64, info *Recorder) {
 		return
 	}
 	defer finalPipe.Close()
-
-	logger.Infof("finalize info: %v", info)
-
 	dirPath := fmt.Sprintf("%s/%d", r.cfg.OutputDir, roomId)
 	filename := fmt.Sprintf("%s/%d.flv", dirPath, info.startTime.Unix())
 	output, err := finalPipe.Process(r.ctx, filename)
