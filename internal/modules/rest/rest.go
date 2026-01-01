@@ -1,15 +1,26 @@
+// @title BiliRec API
+// @version 1.0
+// @description BiliRec REST API
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer <token>" in the Authorization header
 package rest
 
 import (
 	"context"
+	"time"
 
 	_ "github.com/eric2788/bilirec/docs"
 	"github.com/eric2788/bilirec/internal/modules/config"
+
 	"github.com/sirupsen/logrus"
 	"go.uber.org/fx"
 
+	jwt "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/contrib/swagger"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	logging "github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
@@ -27,6 +38,17 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 		Path:     "/",
 		Title:    "BiliRec API Documentation",
 	}))
+
+	if cfg.Username != "" && cfg.PasswordHash != "" {
+		logger.Info("JWT authentication enabled for REST API")
+		app.Post("/login",
+			limiter.New(limiter.Config{Max: 10, Expiration: 1 * time.Minute}),
+			loginHandler(cfg),
+		)
+		app.Use(jwt.New(jwt.Config{
+			SigningKey: jwt.SigningKey{Key: []byte(cfg.JwtSecret)},
+		}))
+	}
 
 	ls.Append(
 		fx.StartStopHook(

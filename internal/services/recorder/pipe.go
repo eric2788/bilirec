@@ -25,7 +25,13 @@ func (r *Service) newStreamPipeline(roomId int64, info *Recorder) (*pipeline.Pip
 }
 
 func (r *Service) newFinalPipeline() (*pipeline.Pipe[string], error) {
-	return pipeline.New(
-		processors.NewMp4FileConverter(false),
-	), nil
+	pipes := pipeline.New[string]()
+
+	if r.cfg.ConvertFLVToMp4 {
+		pipes.AddProcessors(
+			processors.NewMp4FileConverter(r.cfg.DeleteFlvAfterConvert),
+		)
+	}
+
+	return pipes, nil
 }

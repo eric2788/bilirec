@@ -28,6 +28,7 @@ func NewController(app *fiber.App, bilic *bilibili.Client) *Controller {
 // @Summary Get room information
 // @Description Get detailed information about a Bilibili live room
 // @Tags room
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
@@ -56,6 +57,7 @@ func (r *Controller) getRoomInfo(ctx *fiber.Ctx) error {
 // @Summary Check if stream is live
 // @Description Check if a Bilibili live stream is currently live
 // @Tags room
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"

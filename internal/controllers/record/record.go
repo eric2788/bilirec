@@ -28,6 +28,7 @@ func NewController(app *fiber.App, service *recorder.Service) *Controller {
 // @Summary Start recording a live stream
 // @Description Start recording a Bilibili live stream for the specified room
 // @Tags record
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
@@ -52,6 +53,7 @@ func (r *Controller) startRecording(ctx *fiber.Ctx) error {
 // @Summary Stop recording a live stream
 // @Description Stop recording a Bilibili live stream for the specified room
 // @Tags record
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
@@ -74,6 +76,7 @@ func (r *Controller) stopRecording(ctx *fiber.Ctx) error {
 // @Summary Get recording status
 // @Description Get the current recording status for a specific room
 // @Tags record
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
@@ -96,6 +99,7 @@ func (r *Controller) getRecordingStatus(ctx *fiber.Ctx) error {
 // @Summary Get recording statistics
 // @Description Get recording statistics for a specific room
 // @Tags record
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
@@ -119,6 +123,7 @@ func (r *Controller) getRecordingStats(ctx *fiber.Ctx) error {
 // @Summary List all recordings
 // @Description Get a list of all room IDs that are currently being recorded
 // @Tags record
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Success 200 {array} int64 "List of room IDs"
