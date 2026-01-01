@@ -38,6 +38,10 @@ func TestFlvRecord(t *testing.T) {
 	t.Log("start it manually")
 	err := recorderService.Start(room)
 	if err != nil {
+		if err == recorder.ErrStreamNotLive {
+			t.Skip(err)
+			return
+		}
 		t.Fatal(err)
 		return
 	}
