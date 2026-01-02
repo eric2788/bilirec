@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/gomod-cache \
 
 COPY . .
 
-RUN go install github.com/swaggo/swag/cmd/swag@latest
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
 
 RUN --mount=type=cache,target=/gomod-cache \
     --mount=type=cache,target=/go-cache \
