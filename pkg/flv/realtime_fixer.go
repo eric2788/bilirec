@@ -63,6 +63,9 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 		rf.headerWritten = true
 	}
 
+	headerBytes := headerBytesPool.GetBytes()
+	defer headerBytesPool.PutBytes(headerBytes)
+
 	// Parse complete tags from buffer
 	for {
 		// Need PreviousTagSize (4) + TagHeader (11) minimum
@@ -88,7 +91,6 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 		}
 
 		// 🔥 優化: 從 pool 取得 header buffer
-		headerBytes := headerBytesPool.GetBytes()
 		rf.buffer.Read(headerBytes)
 
 		tagType := headerBytes[0]
@@ -108,7 +110,6 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 
 			tempBuf.Reset()
 			byteBufferPool.Put(tempBuf)
-			headerBytesPool.PutBytes(headerBytes)
 			break
 		}
 
@@ -128,9 +129,6 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 		tag.Timestamp = timestamp
 		tag.Data = tagData
 		copy(tag.StreamID[:], headerBytes[8:11])
-
-		// 返還 header buffer
-		headerBytesPool.PutBytes(headerBytes)
 
 		// Detect header/keyframe
 		if len(tagData) >= 2 {
