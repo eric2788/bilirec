@@ -38,10 +38,9 @@ var ErrStreamURLsUnreachable = fmt.Errorf("all stream urls are unreachable")
 var ErrMaxRecordingHoursReached = fmt.Errorf("maximum recording hours reached")
 
 type Recorder struct {
-	status         atomic.Pointer[RecordStatus]
-	bytesRead      atomic.Uint64
-	recoveredCount *xsync.Counter
-	startTime      time.Time
+	status    atomic.Pointer[RecordStatus]
+	bytesRead atomic.Uint64
+	startTime time.Time
 
 	cancel context.CancelFunc
 }
@@ -150,9 +149,8 @@ func (r *Service) prepare(roomId int64, ch <-chan []byte, ctx context.Context, c
 
 	// initialize Recorder info
 	info := &Recorder{
-		cancel:         cancel,
-		recoveredCount: xsync.NewCounter(),
-		startTime:      time.Now(),
+		cancel:    cancel,
+		startTime: time.Now(),
 	}
 	info.status.Store(recordingPtr)
 
@@ -238,42 +236,49 @@ func (r *Service) recover(roomId int64) {
 	} else if status := info.status.Load(); status == recoveringPtr {
 		l.Infof("stream is recovering, skipped.")
 		return
-	} else if info.recoveredCount.Value() >= int64(r.cfg.MaxRecoveryAttempts) {
-		l.Infof("maximum recovery attempts reached (%d), stopping recording", r.cfg.MaxRecoveryAttempts)
-		r.Stop(roomId)
-		return
 	}
-	info.recoveredCount.Inc()
+
 	info.status.Store(recoveringPtr)
-	err := r.Start(roomId)
-	if err != nil {
-
-		retry := func() {
-			timer := time.NewTimer(15 * time.Second)
-			defer timer.Stop()
-			select {
-			case <-timer.C:
-				r.recover(roomId)
-			case <-r.ctx.Done():
-				return
-			}
+	for attempt := 1; attempt <= r.cfg.MaxRecoveryAttempts; attempt++ {
+		err := r.Start(roomId)
+		if err == nil {
+			l.Info("start live stream recovery: success")
+			return
 		}
-
-		l.Errorf("cannot recover stream capture: %v", err)
+		l.Errorf("recovery attempt #%d failed: %v", attempt, err)
 		switch err {
 		case ErrMaxRecordingHoursReached, ErrMaxConcurrentRecordingsReached:
 			l.Infof("stop recovery due to: %v", err)
 			r.Stop(roomId)
+			return
 		case ErrStreamNotLive:
 			l.Infof("stream is offline, will not recover.")
 			r.Stop(roomId)
+			return
 		default:
-			l.Infof("will retry stream recovery in 15 seconds...")
-			retry()
+			// Should check if recording was manually stopped
+			if _, ok := r.recording.Load(roomId); !ok {
+				l.Infof("recording removed during retry, will not recover.")
+				return
+			}
+
+			if attempt < r.cfg.MaxRecoveryAttempts {
+				l.Infof("will retry stream recovery in 15 seconds...")
+				timer := time.NewTimer(15 * time.Second)
+				select {
+				case <-timer.C:
+					continue
+				case <-r.ctx.Done():
+					l.Infof("service is stopping, aborting recovery")
+					timer.Stop()
+					return
+				}
+			}
 		}
-		return
 	}
-	l.Info("start live stream recovery: success")
+
+	l.Infof("maximum recovery attempts reached (%d), stopping recording", r.cfg.MaxRecoveryAttempts)
+	r.Stop(roomId)
 }
 
 func (r *Service) finalize(roomId int64, info *Recorder) {
@@ -316,12 +321,12 @@ func (r *Service) backgroundMaintenance(ctx context.Context) {
 
 			if activeCount == 0 && lastActiveCount > 0 {
 				// Just transitioned from active to idle - cleanup
-				logger.Debugf("Recordings stopped, performing maintenance GC")
+				logger.Info("No ongoing recordings, performing maintenance GC")
 				runtime.GC()
 				debug.FreeOSMemory()
 
 				runtime.ReadMemStats(&m)
-				logger.Debugf("After cleanup: Alloc=%d MB, Sys=%d MB",
+				logger.Infof("After cleanup: Alloc=%d MB, Sys=%d MB",
 					m.Alloc/1024/1024, m.Sys/1024/1024)
 			} else if activeCount == 0 {
 				// Still idle - just log

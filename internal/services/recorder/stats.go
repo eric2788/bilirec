@@ -6,7 +6,6 @@ type Stats struct {
 	BytesWritten   uint64       `json:"bytes_written"`
 	Status         RecordStatus `json:"status"`
 	StartTime      int64        `json:"start_time"`
-	RecoveredCount int64        `json:"recovered_count"`
 	ElapsedSeconds int64        `json:"elapsed_seconds"`
 }
 
@@ -40,7 +39,6 @@ func (r *Service) GetStats(roomId int64) (*Stats, bool) {
 		BytesWritten:   info.bytesRead.Load(),
 		Status:         status,
 		StartTime:      info.startTime.Unix(),
-		RecoveredCount: info.recoveredCount.Value(),
 		ElapsedSeconds: int64(time.Since(info.startTime).Seconds()),
 	}, true
 }
