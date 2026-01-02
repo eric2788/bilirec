@@ -108,7 +108,7 @@ func (af *AccumulateFixer) flushInternal() ([]byte, error) {
 	}
 
 	// 🔥 優化: 從 pool 取得 output buffer
-	output := byteBufferPool.Get().(*bytes.Buffer)
+	output := byteBufferPool.Get()
 	output.Reset()
 
 	// Write header once globally (not per flush)
@@ -140,12 +140,12 @@ func (af *AccumulateFixer) flushInternal() ([]byte, error) {
 
 		// Skip PreviousTagSize
 		// 🔥 優化: 從 pool 取得小 buffer
-		prevTagSizeBytes := smallBytesPool.GetBuffer()
+		prevTagSizeBytes := smallBytesPool.GetBytes()
 		af.buffer.Read(prevTagSizeBytes)
 
 		if af.buffer.Len() < TagHeaderSize {
 			// Restore
-			tempBuf := byteBufferPool.Get().(*bytes.Buffer)
+			tempBuf := byteBufferPool.Get()
 			tempBuf.Reset()
 			tempBuf.Write(prevTagSizeBytes)
 			tempBuf.Write(af.buffer.Bytes())
@@ -153,18 +153,18 @@ func (af *AccumulateFixer) flushInternal() ([]byte, error) {
 			af.buffer.Write(tempBuf.Bytes())
 			tempBuf.Reset()
 			byteBufferPool.Put(tempBuf)
-			smallBytesPool.PutBuffer(prevTagSizeBytes)
+			smallBytesPool.PutBytes(prevTagSizeBytes)
 			break
 		}
 
-		headerBytes := headerBytesPool.GetBuffer()
+		headerBytes := headerBytesPool.GetBytes()
 		af.buffer.Read(headerBytes)
 
 		dataSize := uint32(headerBytes[1])<<16 | uint32(headerBytes[2])<<8 | uint32(headerBytes[3])
 
 		if af.buffer.Len() < int(dataSize) {
 			// Incomplete tag, restore buffer
-			tempBuf := byteBufferPool.Get().(*bytes.Buffer)
+			tempBuf := byteBufferPool.Get()
 			tempBuf.Reset()
 			tempBuf.Write(prevTagSizeBytes)
 			tempBuf.Write(headerBytes)
@@ -173,8 +173,8 @@ func (af *AccumulateFixer) flushInternal() ([]byte, error) {
 			af.buffer.Write(tempBuf.Bytes())
 			tempBuf.Reset()
 			byteBufferPool.Put(tempBuf)
-			headerBytesPool.PutBuffer(headerBytes)
-			smallBytesPool.PutBuffer(prevTagSizeBytes)
+			headerBytesPool.PutBytes(headerBytes)
+			smallBytesPool.PutBytes(prevTagSizeBytes)
 			break
 		}
 
@@ -206,15 +206,15 @@ func (af *AccumulateFixer) flushInternal() ([]byte, error) {
 		if af.dedupCache.IsDuplicate(tag) {
 			af.dupCount++
 			tagPool.Put(tag)
-			headerBytesPool.PutBuffer(headerBytes)
-			smallBytesPool.PutBuffer(prevTagSizeBytes)
+			headerBytesPool.PutBytes(headerBytes)
+			smallBytesPool.PutBytes(prevTagSizeBytes)
 			continue // 跳過重複的 tag
 		}
 
 		tags = append(tags, tag)
 
-		headerBytesPool.PutBuffer(headerBytes)
-		smallBytesPool.PutBuffer(prevTagSizeBytes)
+		headerBytesPool.PutBytes(headerBytes)
+		smallBytesPool.PutBytes(prevTagSizeBytes)
 
 		// Safety check
 		if af.buffer.Len() > startLen {

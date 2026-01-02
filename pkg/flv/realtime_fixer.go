@@ -1,4 +1,4 @@
-package flv
+﻿package flv
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ type RealtimeFixer struct {
 func NewRealtimeFixer() *RealtimeFixer {
 	return &RealtimeFixer{
 		tsStore:       &TimestampStore{FirstChunk: true},
-		buffer:        byteBufferPool.Get().(*bytes.Buffer), // 🔥 優化: 從 pool 取得
+		buffer:        byteBufferPool.Get(), // 🔥 優化: 從 pool 取得
 		headerWritten: false,
 		pendingTags:   make([]*Tag, 0, 32),
 		dedupCache:    NewDedupCache(MaxDedupCacheSize, DedupWindowMs), // 🔥 初始化去重
@@ -47,7 +47,7 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 	rf.buffer.Write(input)
 
 	// 🔥 優化: 從 pool 取得輸出 buffer
-	output := byteBufferPool.Get().(*bytes.Buffer)
+	output := byteBufferPool.Get()
 	output.Reset()
 
 	// Write FLV header once
@@ -85,7 +85,7 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 		}
 
 		// 🔥 優化: 從 pool 取得 header buffer
-		headerBytes := headerBytesPool.GetBuffer()
+		headerBytes := headerBytesPool.GetBytes()
 		rf.buffer.Read(headerBytes)
 
 		tagType := headerBytes[0]
@@ -94,10 +94,10 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 		// Check if we have complete tag data
 		if rf.buffer.Len() < int(dataSize) {
 			// 恢復:  需要更多數據
-			headerBytesPool.PutBuffer(headerBytes)
+			headerBytesPool.PutBytes(headerBytes)
 
 			// 🔥 優化: 手動構建最小恢復
-			tempBuf := byteBufferPool.Get().(*bytes.Buffer)
+			tempBuf := byteBufferPool.Get()
 			tempBuf.Reset()
 			tempBuf.Write([]byte{0, 0, 0, 0}) // PrevTagSize
 			tempBuf.Write(headerBytes)
@@ -129,7 +129,7 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 		copy(tag.StreamID[:], headerBytes[8:11])
 
 		// 返還 header buffer
-		headerBytesPool.PutBuffer(headerBytes)
+		headerBytesPool.PutBytes(headerBytes)
 
 		// Detect header/keyframe
 		if len(tagData) >= 2 {

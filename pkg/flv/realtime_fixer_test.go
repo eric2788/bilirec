@@ -2,7 +2,10 @@ package flv_test
 
 import (
 	"crypto/rand"
+	"fmt"
+	"os"
 	"runtime"
+	"runtime/pprof"
 	"testing"
 	"time"
 
@@ -44,6 +47,8 @@ func TestRealtimeFixer_MemoryLeak(t *testing.T) {
 		t.Fatalf("Failed to process FLV header: %v", err)
 	}
 
+	writeHeapProfile(t, "heap_before.prof")
+
 	// Phase 2: Process chunks
 	start := time.Now()
 	var totalOutput int64
@@ -72,6 +77,8 @@ func TestRealtimeFixer_MemoryLeak(t *testing.T) {
 	// Memory after processing
 	runtime.ReadMemStats(&m2)
 
+	writeHeapProfile(t, "heap_after_process.prof")
+
 	// Phase 3: Force GC
 	t.Log("🧹 Running garbage collection...")
 	runtime.GC()
@@ -79,11 +86,15 @@ func TestRealtimeFixer_MemoryLeak(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	runtime.ReadMemStats(&m3)
 
+	writeHeapProfile(t, "heap_after_gc.prof")
+
 	// Phase 4: Close fixer and measure final memory
 	fixer.Close()
 	runtime.GC()
 	time.Sleep(500 * time.Millisecond)
 	runtime.ReadMemStats(&m4)
+
+	writeHeapProfile(t, "heap_after_close.prof")
 
 	// Analyze memory
 	baseline := float64(m1.Alloc) / (1024 * 1024)
@@ -112,6 +123,12 @@ func TestRealtimeFixer_MemoryLeak(t *testing.T) {
 	if afterGC-baseline > maxRetainedAfterGC {
 		t.Errorf("⚠️  Possible memory leak:  %.2f MB retained after GC (threshold: %.2f MB)",
 			afterGC-baseline, maxRetainedAfterGC)
+		t.Logf("📁 Heap profiles saved:")
+		t.Logf("   - heap_before.prof")
+		t.Logf("   - heap_after_process. prof")
+		t.Logf("   - heap_after_gc.prof")
+		t.Logf("   - heap_after_close.prof")
+		t.Logf("🔍 Analyze with: go tool pprof -http=:8080 heap_after_gc.prof")
 	} else {
 		t.Logf("✅ Memory after GC within acceptable range")
 	}
@@ -130,6 +147,94 @@ func TestRealtimeFixer_MemoryLeak(t *testing.T) {
 	if gcEfficiency < 75.0 {
 		t.Errorf("⚠️  Low GC efficiency: %.1f%% (expected > 75%%)", gcEfficiency)
 	}
+}
+
+func TestRealtimeFixer_HeapAnalysis(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping heap analysis in short mode")
+	}
+
+	fixer := flv.NewRealtimeFixer()
+	defer fixer.Close()
+
+	// FLV header
+	flvHeader := []byte{'F', 'L', 'V', 0x01, 0x05, 0x00, 0x00, 0x00, 0x09}
+	fixer.Fix(flvHeader)
+
+	const iterations = 500
+	chunk := generateFLVChunk(128 * 1024)
+
+	t.Log("📊 Running heap analysis...")
+
+	// Snapshot at intervals
+	snapshots := []int{0, 100, 200, 300, 400, 500}
+
+	for i := 0; i < iterations; i++ {
+		output, err := fixer.Fix(chunk)
+		if err != nil {
+			t.Fatalf("Failed at iteration %d: %v", i, err)
+		}
+		_ = output   // Use output
+		output = nil // Clear reference
+
+		// Take snapshots
+		for _, snap := range snapshots {
+			if i == snap {
+				runtime.GC()
+				time.Sleep(100 * time.Millisecond)
+
+				var m runtime.MemStats
+				runtime.ReadMemStats(&m)
+
+				filename := fmt.Sprintf("heap_iter_%04d.prof", i)
+				writeHeapProfile(t, filename)
+
+				t.Logf("Snapshot %d: %.2f MB allocated", i, float64(m.Alloc)/(1024*1024))
+			}
+		}
+	}
+
+	t.Log("📁 Heap snapshots saved.  Compare with:")
+	t.Log("   go tool pprof -base heap_iter_0000.prof heap_iter_0500.prof")
+	t.Log("   Then run 'top' or 'list' to see what grew")
+}
+
+func TestRealtimeFixer_AllocationTracking(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping allocation tracking in short mode")
+	}
+
+	fixer := flv.NewRealtimeFixer()
+	defer fixer.Close()
+
+	// FLV header
+	flvHeader := []byte{'F', 'L', 'V', 0x01, 0x05, 0x00, 0x00, 0x00, 0x09}
+	fixer.Fix(flvHeader)
+
+	chunk := generateFLVChunk(128 * 1024)
+
+	// Enable CPU profiling to see allocation sites
+	cpuFile, err := os.Create("cpu_alloc.prof")
+	if err != nil {
+		t.Fatalf("Could not create CPU profile: %v", err)
+	}
+	defer cpuFile.Close()
+
+	if err := pprof.StartCPUProfile(cpuFile); err != nil {
+		t.Fatalf("Could not start CPU profile: %v", err)
+	}
+	defer pprof.StopCPUProfile()
+
+	// Run iterations
+	const iterations = 1000
+	for i := 0; i < iterations; i++ {
+		output, _ := fixer.Fix(chunk)
+		_ = output
+		output = nil
+	}
+
+	t.Log("📁 CPU profile saved to cpu_alloc.prof")
+	t.Log("🔍 Analyze with: go tool pprof -http=:8080 cpu_alloc.prof")
 }
 
 func TestRealtimeFixer_BufferPoolLeak(t *testing.T) {
@@ -318,6 +423,21 @@ func TestRealtimeFixer_TagPoolLeak(t *testing.T) {
 		t.Errorf("⚠️  Tag pool may be leaking: %.2f MB retained", afterClose-baseline)
 	} else {
 		t.Logf("✅ Tag pool working correctly")
+	}
+}
+
+// ✅ Helper to write heap profile
+func writeHeapProfile(t *testing.T, filename string) {
+	f, err := os.Create(filename)
+	if err != nil {
+		t.Logf("⚠️  Could not create heap profile %s: %v", filename, err)
+		return
+	}
+	defer f.Close()
+
+	runtime.GC() // Force GC before taking snapshot
+	if err := pprof.WriteHeapProfile(f); err != nil {
+		t.Logf("⚠️  Could not write heap profile %s: %v", filename, err)
 	}
 }
 

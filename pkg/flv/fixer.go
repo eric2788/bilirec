@@ -1,7 +1,6 @@
 package flv
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"hash"
@@ -48,11 +47,7 @@ var (
 	ErrBufferCorrupted = errors.New("buffer corruption detected")
 
 	// 🔥 優化: sync.Pool 用於復用 buffer 和對象
-	byteBufferPool = sync.Pool{
-		New: func() any {
-			return bytes.NewBuffer(make([]byte, 0, DefaultBufferSize))
-		},
-	}
+	byteBufferPool = pool.NewBufferPool(0, DefaultBufferSize)
 
 	tagPool = sync.Pool{
 		New: func() any {
@@ -60,8 +55,8 @@ var (
 		},
 	}
 
-	headerBytesPool = pool.NewBufferPool(TagHeaderSize)
-	smallBytesPool  = pool.NewBufferPool(PrevTagSizeBytes)
+	headerBytesPool = pool.NewBytesPool(TagHeaderSize)
+	smallBytesPool  = pool.NewBytesPool(PrevTagSizeBytes)
 
 	// 🔥 新增: hash 計算器池
 	hasherPool = sync.Pool{
@@ -274,8 +269,8 @@ func (dc *DedupCache) GetStats() (size int, capacity int) {
 
 func writeTagOptimized(w io.Writer, tag *Tag) error {
 	// 🔥 優化: 從 pool 取得 header buffer
-	header := headerBytesPool.GetBuffer()
-	defer headerBytesPool.PutBuffer(header)
+	header := headerBytesPool.GetBytes()
+	defer headerBytesPool.PutBytes(header)
 
 	header[0] = tag.Type
 
@@ -299,8 +294,8 @@ func writeTagOptimized(w io.Writer, tag *Tag) error {
 	}
 
 	// 🔥 優化:  從 pool 取得 prevTagSize buffer
-	prevTagSize := smallBytesPool.GetBuffer()
-	defer smallBytesPool.PutBuffer(prevTagSize)
+	prevTagSize := smallBytesPool.GetBytes()
+	defer smallBytesPool.PutBytes(prevTagSize)
 
 	binary.BigEndian.PutUint32(prevTagSize, uint32(11+len(tag.Data)))
 	if _, err := w.Write(prevTagSize); err != nil {

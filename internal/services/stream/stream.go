@@ -12,7 +12,7 @@ import (
 var logger = logrus.WithField("service", "stream")
 
 type Service struct {
-	pool *pool.BufferPool
+	pool *pool.BytesPool
 }
 
 func NewService() *Service {
@@ -26,7 +26,7 @@ func (r *Service) ReadStream(resp *resty.Response, ctx context.Context) (<-chan 
 }
 
 func (r *Service) Flush(buf []byte) {
-	r.pool.PutBuffer(buf)
+	r.pool.PutBytes(buf)
 }
 
 func (r *Service) read(ch chan<- []byte, stream io.ReadCloser, ctx context.Context) {
@@ -37,7 +37,7 @@ func (r *Service) read(ch chan<- []byte, stream io.ReadCloser, ctx context.Conte
 		case <-ctx.Done():
 			return
 		default:
-			buf := r.pool.GetBuffer()
+			buf := r.pool.GetBytes()
 			n, err := stream.Read(buf)
 			if err == io.EOF {
 				logger.Info("stream ended")
