@@ -179,6 +179,18 @@ func TestAccumulateFix(t *testing.T) {
 	dups, size, capacity := accFixer.GetDedupStats()
 	t.Logf("🗂️ Dedup Stats: %d duplicates detected, cache size: %d/%d", dups, size, capacity)
 }
+
+func TestTagPool_ClearsDataOnPut(t *testing.T) {
+	// Put a tag with a large Data slice into the pool
+
+	tag := &flv.Tag{}
+	tag.Data = make([]byte, 1024*1024) // 1MB
+	tag.Reset()
+	if tag.Data != nil {
+		t.Fatalf("Reset did not clear Data: len=%d cap=%d", len(tag.Data), cap(tag.Data))
+	}
+}
+
 func sendFile(t *testing.T, file string, ch chan<- []byte) {
 	f, err := os.Open(file)
 	if err != nil {

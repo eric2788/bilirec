@@ -150,6 +150,7 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 		// 🔥 新增: 去重檢查 (在修復時間戳之前)
 		if rf.dedupCache.IsDuplicate(tag) {
 			rf.dupCount++
+			tag.Reset() // clear Data and other fields before pooling
 			tagPool.Put(tag)
 			continue // 跳過重複的 tag
 		}
@@ -163,6 +164,7 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 		}
 
 		// 🔥 優化:  返還 tag 到 pool (但保留 Data 因為已經寫入)
+		tag.Reset()
 		tagPool.Put(tag)
 	}
 
