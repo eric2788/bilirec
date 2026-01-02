@@ -10,13 +10,14 @@ import (
 // =====================================================
 
 type RealtimeFixer struct {
-	mu            sync.Mutex
-	tsStore       *TimestampStore
-	buffer        *bytes.Buffer
-	headerWritten bool
-	pendingTags   []*Tag
-	dedupCache    *DedupCache // 🔥 新增:  去重緩存
-	dupCount      int64       // 🔥 新增: 重複計數
+	mu             sync.Mutex
+	tsStore        *TimestampStore
+	buffer         *bytes.Buffer
+	headerWritten  bool
+	pendingTags    []*Tag
+	dedupCache     *DedupCache // 🔥 新增:  去重緩存
+	dupCount       int64       // 🔥 新增: 重複計數
+	lastDedupClean int32       // timestamp of last dedup clean
 }
 
 func NewRealtimeFixer() *RealtimeFixer {
@@ -69,18 +70,20 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 			break
 		}
 
-		// 🔥 優化: 避免完整拷貝，使用切片
-		bufLen := rf.buffer.Len()
-
 		// Skip PreviousTagSize
 		rf.buffer.Next(PrevTagSizeBytes)
 
 		// Peek tag header
+		// Not enough bytes for header yet: rebuild PrevTagSize + remaining bytes safely.
 		if rf.buffer.Len() < TagHeaderSize {
-			// 🔥 優化:  使用 Grow + 手動回退而非完整拷貝
+			tmp := byteBufferPool.Get()
+			tmp.Reset()
+			tmp.Write([]byte{0, 0, 0, 0}) // PrevTagSize
+			tmp.Write(rf.buffer.Bytes())
 			rf.buffer.Reset()
-			remaining := input[len(input)-(bufLen):]
-			rf.buffer.Write(remaining)
+			rf.buffer.Write(tmp.Bytes())
+			tmp.Reset()
+			byteBufferPool.Put(tmp)
 			break
 		}
 
@@ -93,14 +96,11 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 
 		// Check if we have complete tag data
 		if rf.buffer.Len() < int(dataSize) {
-			// 恢復:  需要更多數據
-			headerBytesPool.PutBytes(headerBytes)
-
-			// 🔥 優化: 手動構建最小恢復
+			// Need more bytes: reconstruct PrevTagSize + header + current remainder
 			tempBuf := byteBufferPool.Get()
 			tempBuf.Reset()
 			tempBuf.Write([]byte{0, 0, 0, 0}) // PrevTagSize
-			tempBuf.Write(headerBytes)
+			tempBuf.Write(headerBytes)        // use headerBytes while valid
 			tempBuf.Write(rf.buffer.Bytes())
 
 			rf.buffer.Reset()
@@ -108,6 +108,7 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 
 			tempBuf.Reset()
 			byteBufferPool.Put(tempBuf)
+			headerBytesPool.PutBytes(headerBytes)
 			break
 		}
 
@@ -166,9 +167,16 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 	}
 
 	// 🔥 新增: 定期清理過期去重記錄
+	// Throttle dedup cleaning to avoid calling on every Fix: only when timestamp advanced > 1s.
 	if rf.tsStore.LastOriginal > 0 {
-		rf.dedupCache.CleanOld(rf.tsStore.LastOriginal)
+		if rf.tsStore.LastOriginal-rf.lastDedupClean > 1000 {
+			rf.dedupCache.CleanOld(rf.tsStore.LastOriginal)
+			rf.lastDedupClean = rf.tsStore.LastOriginal
+		}
 	}
+
+	// Try to compact the internal buffer if it grew large
+	rf.compactBufferIfNeeded()
 
 	// 🔥 優化:  返回複製的數據，這樣 output buffer 可以被復用
 	result := make([]byte, output.Len())
@@ -194,8 +202,36 @@ func (rf *RealtimeFixer) Close() {
 	if rf.dedupCache != nil {
 		rf.dedupCache.Reset()
 	}
+
+	// Reset other session state
+	if rf.tsStore != nil {
+		rf.tsStore.Reset()
+	}
+	rf.headerWritten = false
+	rf.pendingTags = nil
 }
 
+// compactBufferIfNeeded shrinks rf.buffer when capacity is much larger than used length.
+func (rf *RealtimeFixer) compactBufferIfNeeded() {
+	if rf.buffer == nil {
+		return
+	}
+	c := rf.buffer.Cap()
+	l := rf.buffer.Len()
+
+	// Heuristic: if buffer is very large (>> MaxBufferSize) and largely empty, shrink it.
+	if c > MaxBufferSize && l <= c/4 {
+		newBuf := byteBufferPool.Get()
+		newBuf.Reset()
+		if l > 0 {
+			newBuf.Write(rf.buffer.Bytes())
+		}
+		old := rf.buffer
+		rf.buffer = newBuf
+		// Return old to pool (Put only keeps buffers <= maxCap; otherwise allow GC)
+		byteBufferPool.Put(old)
+	}
+}
 func (rf *RealtimeFixer) fixTimestamp(tag *Tag) {
 	ts := rf.tsStore
 	currentTimestamp := tag.Timestamp

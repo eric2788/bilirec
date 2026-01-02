@@ -47,7 +47,7 @@ var (
 	ErrBufferCorrupted = errors.New("buffer corruption detected")
 
 	// 🔥 優化: sync.Pool 用於復用 buffer 和對象
-	byteBufferPool = pool.NewBufferPool(0, DefaultBufferSize)
+	byteBufferPool = pool.NewBufferPool(DefaultBufferSize, MaxBufferSize)
 
 	tagPool = sync.Pool{
 		New: func() any {
@@ -138,15 +138,11 @@ func (dc *DedupCache) computeSignature(tag *Tag) uint64 {
 	}()
 
 	// 組合:  Type + Timestamp + DataSize + Data(前32字節)
-	hasher.Write([]byte{tag.Type})
-
-	tsBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(tsBytes, uint32(tag.Timestamp))
-	hasher.Write(tsBytes)
-
-	sizeBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(sizeBytes, tag.DataSize)
-	hasher.Write(sizeBytes)
+	var tmp [9]byte
+	tmp[0] = tag.Type
+	binary.BigEndian.PutUint32(tmp[1:5], uint32(tag.Timestamp))
+	binary.BigEndian.PutUint32(tmp[5:9], tag.DataSize)
+	hasher.Write(tmp[:9])
 
 	// 只用前32字節數據計算hash (平衡性能和準確性)
 	dataLen := len(tag.Data)
@@ -210,11 +206,10 @@ func (dc *DedupCache) add(hash uint64, sig *TagSignature) {
 			removeCount = 1
 		}
 
-		for i := 0; i < removeCount && len(dc.order) > 0; i++ {
-			oldHash := dc.order[0]
+		for _, oldHash := range dc.order[:removeCount] {
 			delete(dc.signatures, oldHash)
-			dc.order = dc.order[1:]
 		}
+		dc.order = dc.order[removeCount:]
 	}
 
 	// 添加新記錄
