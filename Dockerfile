@@ -46,6 +46,9 @@ ENV ANONYMOUS_LOGIN=false \
     CONVERT_FLV_TO_MP4=false \
     DELETE_FLV_AFTER_CONVERT=false
 
+ENV GOMEMLIMIT=256MiB
+ENV GOGC=50
+
 # VOLUMES [ "/app/secrets", "/app/records" ]
 # EXPOSE 8080
 

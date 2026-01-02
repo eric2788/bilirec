@@ -4,7 +4,7 @@ import (
 	"sync"
 )
 
-var DefaultBufferPool = NewBytesPool(102400)
+var DefaultBufferPool = NewBytesPool(32768) // 32 KB
 
 type BytesPool sync.Pool
 

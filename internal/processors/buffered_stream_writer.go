@@ -39,11 +39,12 @@ func (w *BufferedStreamWriterProcessor) Open(ctx context.Context, log *logrus.En
 		return err
 	}
 	w.file = file
-	w.writer = bufio.NewWriterSize(file, 4*1024*1024) // 4 MB buffer
+	w.writer = bufio.NewWriterSize(file, 4*1024*1024)
 	w.logger = log.WithField("file", file.Name())
 	w.ctx, w.cancel = context.WithCancel(context.Background())
-	w.wait.Add(1)
+	w.wait.Add(2)
 	go w.flushPeriodically(w.ctx)
+	go w.syncPeriodically(w.ctx)
 	return nil
 }
 
@@ -60,7 +61,9 @@ func (w *BufferedStreamWriterProcessor) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if err := w.writer.Flush(); err != nil {
-		return err
+		w.logger.Warnf("error flushing writer: %v", err)
+	} else if err := w.file.Sync(); err != nil {
+		w.logger.Warnf("error syncing file: %v", err)
 	}
 	return w.file.Close()
 }
@@ -75,6 +78,24 @@ func (w *BufferedStreamWriterProcessor) flushPeriodically(ctx context.Context) {
 			w.mu.Lock()
 			if err := w.writer.Flush(); err != nil {
 				w.logger.Warnf("error flushing writer: %v", err)
+			}
+			w.mu.Unlock()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (w *BufferedStreamWriterProcessor) syncPeriodically(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer w.wait.Done()
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			w.mu.Lock()
+			if err := w.file.Sync(); err != nil {
+				w.logger.Warnf("error syncing file: %v", err)
 			}
 			w.mu.Unlock()
 		case <-ctx.Done():

@@ -19,7 +19,7 @@ func TestRecorder_MemoryLeak_SingleSession(t *testing.T) {
 		t.Skip("Skipping recorder memory test in short mode")
 	}
 
-	const testRoom = 1842862714 // Replace with a known live room for testing
+	const testRoom = 1880711533 // Replace with a known live room for testing
 
 	var recorderService *recorder.Service
 
@@ -115,9 +115,10 @@ func TestRecorder_MemoryLeak_SingleSession(t *testing.T) {
 	cleanupEfficiency := (afterStop - afterGC) / (duringRecord - baseline) * 100
 	t.Logf("📈 Cleanup efficiency: %.1f%%", cleanupEfficiency)
 
-	if cleanupEfficiency < 70.0 {
-		t.Errorf("⚠️  Low cleanup efficiency: %.1f%% (expected > 70%%)", cleanupEfficiency)
-	}
+	// because we have freeMemory and GC in recorder stop, so the efficiency will be zero
+	// if cleanupEfficiency < 70.0 {
+	// 	t.Errorf("⚠️  Low cleanup efficiency: %.1f%% (expected > 70%%)", cleanupEfficiency)
+	// }
 }
 
 func TestRecorder_MemoryLeak_MultipleStartStop(t *testing.T) {

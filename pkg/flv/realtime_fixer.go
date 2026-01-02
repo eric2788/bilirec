@@ -169,9 +169,9 @@ func (rf *RealtimeFixer) Fix(input []byte) ([]byte, error) {
 	}
 
 	// 🔥 新增: 定期清理過期去重記錄
-	// Throttle dedup cleaning to avoid calling on every Fix: only when timestamp advanced > 1s.
+	// 🔥 FIX: Clean more frequently (every 500ms instead of 1000ms) to prevent memory buildup
 	if rf.tsStore.LastOriginal > 0 {
-		if rf.tsStore.LastOriginal-rf.lastDedupClean > 1000 {
+		if rf.tsStore.LastOriginal-rf.lastDedupClean > 500 {
 			rf.dedupCache.CleanOld(rf.tsStore.LastOriginal)
 			rf.lastDedupClean = rf.tsStore.LastOriginal
 		}

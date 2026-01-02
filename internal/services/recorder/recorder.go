@@ -3,6 +3,8 @@ package recorder
 import (
 	"context"
 	"fmt"
+	"runtime"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 
@@ -72,6 +74,7 @@ func NewService(
 		ctx:       ctx,
 	}
 
+	go s.backgroundMaintenance(ctx)
 	lc.Append(fx.StopHook(cancel))
 	return s
 }
@@ -184,8 +187,9 @@ func (r *Service) rev(roomId int64, ch <-chan []byte, info *Recorder, pipe *pipe
 	for data := range ch {
 
 		info.bytesRead.Add(uint64(len(data)))
-		_, err := pipe.Process(r.ctx, data)
+		result, err := pipe.Process(r.ctx, data)
 		r.st.Flush(data)
+		_ = result
 
 		if err != nil {
 			l.Errorf("error writing data to file: %v", err)
@@ -295,4 +299,44 @@ func (r *Service) finalize(roomId int64, info *Recorder) {
 		return
 	}
 	logger.Infof("finalized recording for room %d: %s", roomId, output)
+}
+
+func (r *Service) backgroundMaintenance(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	lastActiveCount := 0
+
+	for {
+		select {
+		case <-ticker.C:
+			activeCount := r.recording.Size()
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+
+			if activeCount == 0 && lastActiveCount > 0 {
+				// Just transitioned from active to idle - cleanup
+				logger.Debugf("Recordings stopped, performing maintenance GC")
+				runtime.GC()
+				debug.FreeOSMemory()
+
+				runtime.ReadMemStats(&m)
+				logger.Debugf("After cleanup: Alloc=%d MB, Sys=%d MB",
+					m.Alloc/1024/1024, m.Sys/1024/1024)
+			} else if activeCount == 0 {
+				// Still idle - just log
+				logger.Debugf("Idle: Memory: Alloc=%d MB, Sys=%d MB, NumGC=%d",
+					m.Alloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+			} else {
+				// Recordings active - just log stats
+				logger.Debugf("Active recordings: %d, Memory: Alloc=%d MB, Sys=%d MB, NumGC=%d",
+					activeCount, m.Alloc/1024/1024, m.Sys/1024/1024, m.NumGC)
+			}
+
+			lastActiveCount = activeCount
+
+		case <-ctx.Done():
+			return
+		}
+	}
 }

@@ -200,8 +200,8 @@ func (dc *DedupCache) add(hash uint64, sig *TagSignature) {
 
 	// 檢查緩存大小，執行 FIFO 清理
 	if len(dc.signatures) >= dc.maxSize {
-		// 移除最舊的 10%
-		removeCount := dc.maxSize / 10
+		// 🔥 FIX: Remove 20% instead of 10% to reduce frequency of cleanups
+		removeCount := dc.maxSize / 5
 		if removeCount < 1 {
 			removeCount = 1
 		}
@@ -209,7 +209,9 @@ func (dc *DedupCache) add(hash uint64, sig *TagSignature) {
 		for _, oldHash := range dc.order[:removeCount] {
 			delete(dc.signatures, oldHash)
 		}
-		dc.order = dc.order[removeCount:]
+		// Keep the slice but shift remaining elements
+		copy(dc.order, dc.order[removeCount:])
+		dc.order = dc.order[:len(dc.order)-removeCount]
 	}
 
 	// 添加新記錄
@@ -222,7 +224,8 @@ func (dc *DedupCache) CleanOld(currentTimestamp int32) {
 	dc.mu.Lock()
 	defer dc.mu.Unlock()
 
-	validHashes := make([]uint64, 0, len(dc.order))
+	// 🔥 FIX: Reuse the existing slice to avoid allocations
+	writeIdx := 0
 
 	for _, hash := range dc.order {
 		sig := dc.signatures[hash]
@@ -233,13 +236,15 @@ func (dc *DedupCache) CleanOld(currentTimestamp int32) {
 
 		// 保留在窗口內的記錄
 		if timeDiff <= dc.windowMs*2 { // 保留2倍窗口以容錯
-			validHashes = append(validHashes, hash)
+			dc.order[writeIdx] = hash
+			writeIdx++
 		} else {
 			delete(dc.signatures, hash)
 		}
 	}
 
-	dc.order = validHashes
+	// Trim the slice without reallocating
+	dc.order = dc.order[:writeIdx]
 }
 
 // 重置緩存
