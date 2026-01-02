@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/eric2788/bilirec/utils"
+	"github.com/sirupsen/logrus"
 	"go.uber.org/fx"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -26,6 +27,8 @@ type Config struct {
 	Username     string
 	PasswordHash string
 	JwtSecret    string
+
+	Debug bool
 }
 
 func provider() (*Config, error) {
@@ -46,6 +49,12 @@ func provider() (*Config, error) {
 		return nil, err
 	}
 
+	debug := os.Getenv("DEBUG") == "true"
+
+	if debug {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+
 	return &Config{
 		AnonymousLogin:          os.Getenv("ANONYMOUS_LOGIN") == "true",
 		Port:                    utils.EmptyOrElse(os.Getenv("PORT"), "8080"),
@@ -59,6 +68,7 @@ func provider() (*Config, error) {
 		Username:                username,
 		PasswordHash:            string(passwordHash),
 		JwtSecret:               utils.EmptyOrElse(os.Getenv("JWT_SECRET"), "bilirec_secret"),
+		Debug:                   debug,
 	}, nil
 }
 

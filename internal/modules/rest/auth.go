@@ -40,7 +40,7 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 		user := req.User
 		pass := req.Pass
 
-		if subtle.ConstantTimeCompare([]byte(user), []byte(cfg.Username)) != 1 || bcrypt.CompareHashAndPassword([]byte(cfg.PasswordHash), []byte(pass)) != nil {
+		if compareUsernameAndPassword(cfg, user, pass) {
 			return fiber.ErrUnauthorized
 		}
 
@@ -59,4 +59,8 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 
 		return c.JSON(loginResponse{Token: t})
 	}
+}
+
+func compareUsernameAndPassword(cfg *config.Config, user, pass string) bool {
+	return subtle.ConstantTimeCompare([]byte(user), []byte(cfg.Username)) != 1 || bcrypt.CompareHashAndPassword([]byte(cfg.PasswordHash), []byte(pass)) != nil
 }

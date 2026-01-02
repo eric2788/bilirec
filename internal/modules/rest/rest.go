@@ -27,6 +27,7 @@ import (
 
 	_ "github.com/eric2788/bilirec/docs"
 	"github.com/eric2788/bilirec/internal/modules/config"
+	"github.com/eric2788/bilirec/utils"
 
 	"github.com/sirupsen/logrus"
 	"go.uber.org/fx"
@@ -35,6 +36,7 @@ import (
 	"github.com/gofiber/contrib/v3/swagger"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/extractors"
+	"github.com/gofiber/fiber/v3/middleware/basicauth"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	logging "github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/pprof"
@@ -47,7 +49,20 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 	app := fiber.New()
 
 	app.Use(recover.New())
-	app.Use(pprof.New())
+
+	if cfg.Debug {
+		hexStr := utils.RandomHexStringMust(32)
+		logger.Infof("you can use hex token (%s) or username/password to login /debug/pprof", hexStr)
+		app.Use(pprof.New(), basicauth.New(basicauth.Config{
+			Authorizer: func(s1, s2 string, c fiber.Ctx) bool {
+				if c.Get("Authorization") == hexStr {
+					return true
+				}
+				return compareUsernameAndPassword(cfg, s1, s2)
+			},
+		}))
+	}
+
 	app.Use(logging.New(logging.Config{
 		Format: "| ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error}\n",
 		Stream: logger.Writer(),
