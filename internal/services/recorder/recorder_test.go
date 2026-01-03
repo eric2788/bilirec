@@ -40,10 +40,8 @@ func TestFlvRecord(t *testing.T) {
 	if err != nil {
 		if err == recorder.ErrStreamNotLive {
 			t.Skip(err)
-			return
 		}
 		t.Fatal(err)
-		return
 	}
 
 	<-time.After(15 * time.Second)

@@ -88,7 +88,6 @@ func TestGetStreamUrls(t *testing.T) {
 	if err != nil {
 		if bilibili.IsErrRoomNotFound(err) {
 			t.Skip("room not found, skipped")
-			return
 		}
 		t.Fatal(err)
 	}
@@ -112,7 +111,6 @@ func TestGetStreamUrlsV2(t *testing.T) {
 	if err != nil {
 		if bilibili.IsErrRoomNotFound(err) {
 			t.Skip("room not found, skipped")
-			return
 		}
 		t.Fatal(err)
 	}

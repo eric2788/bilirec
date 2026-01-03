@@ -48,7 +48,6 @@ func TestRecorder_MemoryLeak_SingleSession(t *testing.T) {
 	if err != nil {
 		if err == recorder.ErrStreamNotLive {
 			t.Skip("Stream not live, skipping test")
-			return
 		}
 		t.Fatalf("Failed to start recording:  %v", err)
 	}
@@ -159,7 +158,6 @@ func TestRecorder_MemoryLeak_MultipleStartStop(t *testing.T) {
 		if err != nil {
 			if err == recorder.ErrStreamNotLive {
 				t.Skip("Stream not live")
-				return
 			}
 			t.Fatalf("Cycle %d: Failed to start:  %v", cycle, err)
 		}
@@ -242,7 +240,6 @@ func TestRecorder_MemoryLeak_ProcessedDataCleanup(t *testing.T) {
 	if err != nil {
 		if err == recorder.ErrStreamNotLive {
 			t.Skip("Stream not live")
-			return
 		}
 		t.Fatalf("Failed to start:  %v", err)
 	}
@@ -397,7 +394,6 @@ func TestRecorder_Goroutine_Leak(t *testing.T) {
 		if err != nil {
 			if err == recorder.ErrStreamNotLive {
 				t.Skip("Stream not live")
-				return
 			}
 			t.Fatalf("Failed to start: %v", err)
 		}

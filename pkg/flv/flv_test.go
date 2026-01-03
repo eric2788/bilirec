@@ -212,7 +212,6 @@ func sendFile(t *testing.T, file string, ch chan<- []byte) {
 		}
 		if err != nil {
 			t.Fatal(err)
-			break
 		}
 		if n > 0 {
 			ch <- buf[:n]
