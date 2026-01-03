@@ -53,14 +53,14 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 	if cfg.Debug {
 		hexStr := utils.RandomHexStringMust(32)
 		logger.Infof("you can use hex token (%s) or username/password to login /debug/pprof", hexStr)
-		app.Use(pprof.New(), basicauth.New(basicauth.Config{
+		app.Use("/debug/pprof", basicauth.New(basicauth.Config{
 			Authorizer: func(s1, s2 string, c fiber.Ctx) bool {
 				if c.Get("Authorization") == hexStr {
 					return true
 				}
 				return compareUsernameAndPassword(cfg, s1, s2)
 			},
-		}))
+		}), pprof.New())
 	}
 
 	app.Use(logging.New(logging.Config{
