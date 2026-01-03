@@ -38,9 +38,10 @@ var ErrStreamURLsUnreachable = fmt.Errorf("all stream urls are unreachable")
 var ErrMaxRecordingHoursReached = fmt.Errorf("maximum recording hours reached")
 
 type Recorder struct {
-	status    atomic.Pointer[RecordStatus]
-	bytesRead atomic.Uint64
-	startTime time.Time
+	status     atomic.Pointer[RecordStatus]
+	bytesRead  atomic.Uint64
+	startTime  time.Time
+	outputPath string
 
 	cancel context.CancelFunc
 }
@@ -104,6 +105,13 @@ func (r *Service) Start(roomId int) error {
 		return ErrEmptyStreamURLs
 	}
 
+	now := time.Now()
+
+	outputPath, err := r.prepareFilePath(roomInfo, now)
+	if err != nil {
+		return fmt.Errorf("cannot prepare file path: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(r.ctx)
 
 	// retry mechanism
@@ -119,7 +127,15 @@ func (r *Service) Start(roomId int) error {
 			continue
 		}
 
-		return r.prepare(roomId, ch, ctx, cancel)
+		// initialize Recorder info
+		info := &Recorder{
+			cancel:     cancel,
+			startTime:  now,
+			outputPath: outputPath,
+		}
+		info.status.Store(recordingPtr)
+
+		return r.prepare(roomId, ch, ctx, info)
 	}
 	cancel()
 	l.Warn("no more url left")
@@ -145,17 +161,8 @@ func (r *Service) Stop(roomId int) bool {
 	return hasRecording
 }
 
-func (r *Service) prepare(roomId int, ch <-chan []byte, ctx context.Context, cancel context.CancelFunc) error {
-
-	// initialize Recorder info
-	info := &Recorder{
-		cancel:    cancel,
-		startTime: time.Now(),
-	}
-	info.status.Store(recordingPtr)
-
-	// initialize pipeline
-	pipe, err := r.newStreamPipeline(roomId, info)
+func (r *Service) prepare(roomId int, ch <-chan []byte, ctx context.Context, info *Recorder) error {
+	pipe, err := r.newStreamPipeline(info.outputPath)
 	if err != nil {
 		return fmt.Errorf("cannot create pipeline: %v", err)
 	}
@@ -226,6 +233,9 @@ func (r *Service) checkRecordingDurationPeriodically(roomId int, ctx context.Con
 	}
 }
 
+// Note: Each recovery attempt creates a NEW file with a new timestamp.
+// This is intentional - we want separate files for each recording segment
+// rather than appending to the same file. Multiple files per session is expected.
 func (r *Service) recover(roomId int) {
 	l := logger.WithField("room", roomId)
 	l.Infof("trying to recover stream capture...")
@@ -296,9 +306,7 @@ func (r *Service) finalize(roomId int, info *Recorder) {
 		return
 	}
 	defer finalPipe.Close()
-	dirPath := fmt.Sprintf("%s/%d", r.cfg.OutputDir, roomId)
-	filename := fmt.Sprintf("%s/%d.flv", dirPath, info.startTime.Unix())
-	output, err := finalPipe.Process(r.ctx, filename)
+	output, err := finalPipe.Process(r.ctx, info.outputPath)
 	if err != nil {
 		logger.Errorf("cannot process final pipeline for room %d: %v", roomId, err)
 		return

@@ -4,8 +4,6 @@ import (
 	"sync"
 )
 
-var DefaultBufferPool = NewBytesPool(32768) // 32 KB
-
 type BytesPool sync.Pool
 
 func NewBytesPool(bufferSize int) *BytesPool {

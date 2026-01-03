@@ -16,7 +16,7 @@ type Service struct {
 }
 
 func NewService() *Service {
-	return &Service{pool: pool.DefaultBufferPool}
+	return &Service{pool: pool.NewBytesPool(256 * 1024)}
 }
 
 func (r *Service) ReadStream(resp *resty.Response, ctx context.Context) (<-chan []byte, error) {
