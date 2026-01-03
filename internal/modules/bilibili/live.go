@@ -31,7 +31,7 @@ func IsErrRoomNotFound(err error) bool {
 		return true
 	}
 	cause := errors.Cause(err)
-	if biliErr, ok := cause.(*bili.Error); ok && biliErr.Code == 1 {
+	if biliErr, ok := cause.(bili.Error); ok && biliErr.Code == 1 {
 		return true
 	}
 	return false
