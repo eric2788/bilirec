@@ -37,11 +37,14 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/extractors"
 	"github.com/gofiber/fiber/v3/middleware/basicauth"
+	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	logging "github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/pprof"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 )
+
+const jwtTokenKey = "jwtToken"
 
 var logger = logrus.WithField("module", "rest")
 
@@ -67,12 +70,19 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 		Format: "| ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error}\n",
 		Stream: logger.Writer(),
 	}))
+
 	app.Use(swagger.New(swagger.Config{
 		BasePath: "/",
 		FilePath: "./docs/swagger.json",
 		Path:     "/",
 		Title:    "BiliRec API Documentation",
 	}))
+
+	if cfg.ProductionMode {
+		app.Use(cors.New(cors.Config{
+			AllowOrigins:     []string{cfg.FrontendURL.String()},
+		}))
+	}
 
 	if cfg.Username != "" && cfg.PasswordHash != "" {
 		logger.Info("JWT authentication enabled for REST API")
@@ -81,6 +91,7 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 			loginHandler(cfg),
 		)
 		app.Use(jwt.New(jwt.Config{
+			Extractor: extractors.FromCookie(jwtTokenKey),
 			SigningKey: jwt.SigningKey{Key: []byte(cfg.JwtSecret)},
 			ErrorHandler: func(c fiber.Ctx, err error) error {
 				if errors.Is(err, extractors.ErrNotFound) {

@@ -44,10 +44,12 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 			return fiber.ErrUnauthorized
 		}
 
+		expire := time.Now().Add(time.Hour * 72)
+
 		claims := jwt.MapClaims{
 			"name": cfg.Username,
 			"iat":  time.Now().Unix(),
-			"exp":  time.Now().Add(time.Hour * 72).Unix(),
+			"exp":  expire.Unix(),
 			"iss":  "bilirec",
 		}
 
@@ -57,7 +59,18 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 			return fiber.ErrInternalServerError
 		}
 
-		return c.JSON(loginResponse{Token: t})
+		c.Cookie(&fiber.Cookie{
+			Expires:  expire,
+			Name:     jwtTokenKey,
+			Value:    t,
+			Path:     "/",
+			Domain:   cfg.FrontendURL.Hostname(),
+			HTTPOnly: cfg.ProductionMode,
+			Secure:   cfg.ProductionMode,
+			SameSite: "None",
+		})
+
+		return c.SendStatus(fiber.StatusOK)
 	}
 }
 
