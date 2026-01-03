@@ -63,7 +63,7 @@ func (p *Pipe[T]) process(ctx context.Context, tp *ProcessorInfo[T], item T) (T,
 	defer cancel()
 	defer func() {
 		elapsed := time.Since(start)
-		if elapsed > 500*time.Millisecond {
+		if elapsed > tp.timeout/2 {
 			tp.logger.Warnf("processor took too long to execute: %vms", elapsed.Microseconds())
 		} else {
 			tp.logger.Tracef("processor executed: %vms", elapsed.Microseconds())

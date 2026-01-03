@@ -36,7 +36,8 @@ func (c *Controller) listFiles(ctx fiber.Ctx) error {
 
 func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	path := ctx.Params("*", "/")
-	f, err := c.fileSvc.GetFileStream(path)
+	format := ctx.Query("format", "flv")
+	f, err := c.fileSvc.GetFileStream(path, format)
 	if err != nil {
 		logger.Warnf("error getting file stream at path %s: %v", path, err)
 		return c.parseFiberError(err)

@@ -1,14 +1,19 @@
 package file
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/eric2788/bilirec/internal/modules/config"
+	"github.com/eric2788/bilirec/internal/processors"
+	"github.com/eric2788/bilirec/pkg/pipeline"
 	"github.com/sirupsen/logrus"
+	"go.uber.org/fx"
 )
 
 var logger = logrus.WithField("service", "file")
@@ -20,6 +25,7 @@ var ErrIsDirectory = fmt.Errorf("path is a directory")
 
 type Service struct {
 	cfg *config.Config
+	ctx context.Context
 }
 
 type Tree struct {
@@ -29,8 +35,13 @@ type Tree struct {
 	Size  int64
 }
 
-func NewService(cfg *config.Config) *Service {
-	return &Service{cfg: cfg}
+func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
+	s := &Service{cfg: cfg}
+	ls.Append(fx.StartHook(func(ctx context.Context) error {
+		s.ctx = ctx
+		return nil
+	}))
+	return s
 }
 
 func (s *Service) ListTree(path string) ([]*Tree, error) {
@@ -71,7 +82,7 @@ func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool)
 	return files, nil
 }
 
-func (s *Service) GetFileStream(path string) (*os.File, error) {
+func (s *Service) GetFileStream(path, format string) (io.ReadCloser, error) {
 	fullPath, err := s.validatePath(path)
 	if err != nil {
 		return nil, err
@@ -85,7 +96,28 @@ func (s *Service) GetFileStream(path string) (*os.File, error) {
 		return nil, ErrIsDirectory
 	}
 
-	return os.Open(fullPath)
+	if format == "" || strings.HasSuffix(fullPath, "."+format) {
+		return os.Open(fullPath)
+	}
+
+	processor := pipeline.New(processors.NewFileConverter(format))
+
+	if err := processor.Open(s.ctx); err != nil {
+		return nil, fmt.Errorf("failed to open file converter: %v", err)
+	}
+	defer processor.Close()
+
+	dest, err := processor.Process(s.ctx, fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert file: %v", err)
+	}
+
+	destFile, err := os.Open(dest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open converted file: %v", err)
+	}
+
+	return NewTempReader(destFile), nil
 }
 
 func (s *Service) validatePath(path string) (string, error) {

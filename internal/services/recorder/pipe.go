@@ -29,7 +29,9 @@ func (r *Service) newFinalPipeline() (*pipeline.Pipe[string], error) {
 
 	if r.cfg.ConvertFLVToMp4 {
 		pipes.AddProcessors(
-			processors.NewMp4FileConverter(r.cfg.DeleteFlvAfterConvert),
+			processors.NewMp4FileConverter(
+				processors.FileConverterWithDeleteSource(r.cfg.DeleteFlvAfterConvert),
+			),
 		)
 	}
 
