@@ -120,6 +120,31 @@ func (s *Service) GetFileStream(path, format string) (io.ReadCloser, error) {
 	return NewTempReader(destFile), nil
 }
 
+func (s *Service) DeleteDirectory(path string) error {
+	fullPath, err := s.validatePath(path)
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(fullPath)
+}
+
+func (s *Service) DeleteFiles(paths ...string) error {
+	var fullPaths []string
+	for _, path := range paths {
+		fullPath, err := s.validatePath(path)
+		if err != nil {
+			return err
+		}
+		fullPaths = append(fullPaths, fullPath)
+	}
+	for _, fullPath := range fullPaths {
+		if err := os.Remove(fullPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) validatePath(path string) (string, error) {
 	baseAbs, err := filepath.Abs(s.cfg.OutputDir)
 	if err != nil {

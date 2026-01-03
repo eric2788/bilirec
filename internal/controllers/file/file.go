@@ -19,8 +19,13 @@ func NewController(app *fiber.App, fileSvc *file.Service) *Controller {
 		fileSvc: fileSvc,
 	}
 	files := app.Group("/files")
+
 	files.Get("/*", fc.listFiles)
 	files.Post("/*", fc.downloadFile)
+
+	files.Delete("/*", fc.deleteDir)
+	files.Delete("/batch", fc.deleteFiles)
+	
 	return fc
 }
 
@@ -44,6 +49,27 @@ func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	}
 	defer f.Close()
 	return ctx.SendStream(f)
+}
+
+func (c *Controller) deleteFiles(ctx fiber.Ctx) error {
+	var paths []string
+	if err := ctx.Bind().Body(&paths); err != nil {
+		return fiber.ErrBadRequest
+	}
+	if err := c.fileSvc.DeleteFiles(paths...); err != nil {
+		logger.Warnf("error deleting files: %v", err)
+		return c.parseFiberError(err)
+	}
+	return ctx.SendStatus(fiber.StatusNoContent)
+}
+
+func (c *Controller) deleteDir(ctx fiber.Ctx) error {
+	path := ctx.Params("*", "/")
+	if err := c.fileSvc.DeleteDirectory(path); err != nil {
+		logger.Warnf("error deleting directory at path %s: %v", path, err)
+		return c.parseFiberError(err)
+	}
+	return ctx.SendStatus(fiber.StatusNoContent)
 }
 
 func (c *Controller) parseFiberError(err error) error {
