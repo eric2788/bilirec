@@ -89,7 +89,7 @@ type (
 const v1StreamAPI = "https://api.live.bilibili.com/room/v1/Room/playUrl"
 const v2StreamAPI = "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo"
 
-func (c *Client) GetStreamURLs(roomID int64) ([]string, error) {
+func (c *Client) GetStreamURLs(roomID int) ([]string, error) {
 	client := c.liveClient.R()
 	client.SetQueryParams(map[string]string{
 		"cid":      fmt.Sprint(roomID),
@@ -121,7 +121,7 @@ func (c *Client) GetStreamURLs(roomID int64) ([]string, error) {
 	return urls, nil
 }
 
-func (c *Client) GetStreamURLsV2(roomID int64) ([]string, error) {
+func (c *Client) GetStreamURLsV2(roomID int) ([]string, error) {
 	client := c.liveClient.R()
 	client.SetQueryParams(map[string]string{
 		"room_id":      fmt.Sprint(roomID),

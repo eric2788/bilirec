@@ -48,8 +48,8 @@ type Recorder struct {
 type Service struct {
 	st        *stream.Service
 	bilic     *bilibili.Client
-	recording *xsync.Map[int64, *Recorder]
-	pipes     *xsync.Map[int64, *pipeline.Pipe[[]byte]]
+	recording *xsync.Map[int, *Recorder]
+	pipes     *xsync.Map[int, *pipeline.Pipe[[]byte]]
 
 	cfg *config.Config
 	ctx context.Context
@@ -67,8 +67,8 @@ func NewService(
 	s := &Service{
 		st:        st,
 		bilic:     bilic,
-		recording: xsync.NewMap[int64, *Recorder](),
-		pipes:     xsync.NewMap[int64, *pipeline.Pipe[[]byte]](),
+		recording: xsync.NewMap[int, *Recorder](),
+		pipes:     xsync.NewMap[int, *pipeline.Pipe[[]byte]](),
 		cfg:       cfg,
 		ctx:       ctx,
 	}
@@ -78,7 +78,7 @@ func NewService(
 	return s
 }
 
-func (r *Service) Start(roomId int64) error {
+func (r *Service) Start(roomId int) error {
 
 	l := logger.WithField("room", roomId)
 
@@ -126,7 +126,7 @@ func (r *Service) Start(roomId int64) error {
 	return ErrStreamURLsUnreachable
 }
 
-func (r *Service) Stop(roomId int64) bool {
+func (r *Service) Stop(roomId int) bool {
 
 	info, hasRecording := r.recording.LoadAndDelete(roomId)
 	pipe, hasPipe := r.pipes.LoadAndDelete(roomId)
@@ -145,7 +145,7 @@ func (r *Service) Stop(roomId int64) bool {
 	return hasRecording
 }
 
-func (r *Service) prepare(roomId int64, ch <-chan []byte, ctx context.Context, cancel context.CancelFunc) error {
+func (r *Service) prepare(roomId int, ch <-chan []byte, ctx context.Context, cancel context.CancelFunc) error {
 
 	// initialize Recorder info
 	info := &Recorder{
@@ -175,7 +175,7 @@ func (r *Service) prepare(roomId int64, ch <-chan []byte, ctx context.Context, c
 	return nil
 }
 
-func (r *Service) rev(roomId int64, ch <-chan []byte, info *Recorder, pipe *pipeline.Pipe[[]byte]) {
+func (r *Service) rev(roomId int, ch <-chan []byte, info *Recorder, pipe *pipeline.Pipe[[]byte]) {
 	l := logger.WithField("room", roomId)
 	defer r.recover(roomId)
 	defer func() {
@@ -196,7 +196,7 @@ func (r *Service) rev(roomId int64, ch <-chan []byte, info *Recorder, pipe *pipe
 	}
 }
 
-func (r *Service) checkRecordingDurationPeriodically(roomId int64, ctx context.Context) {
+func (r *Service) checkRecordingDurationPeriodically(roomId int, ctx context.Context) {
 	log := logger.WithField("room", roomId)
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -226,7 +226,7 @@ func (r *Service) checkRecordingDurationPeriodically(roomId int64, ctx context.C
 	}
 }
 
-func (r *Service) recover(roomId int64) {
+func (r *Service) recover(roomId int) {
 	l := logger.WithField("room", roomId)
 	l.Infof("trying to recover stream capture...")
 	info, ok := r.recording.Load(roomId)
@@ -281,7 +281,7 @@ func (r *Service) recover(roomId int64) {
 	r.Stop(roomId)
 }
 
-func (r *Service) finalize(roomId int64, info *Recorder) {
+func (r *Service) finalize(roomId int, info *Recorder) {
 	if info == nil {
 		logger.Warnf("skipping finalize for room %d: no recording info", roomId)
 		return

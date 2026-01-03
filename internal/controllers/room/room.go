@@ -37,9 +37,9 @@ func NewController(app *fiber.App, bilic *bilibili.Client) *Controller {
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/{roomID}/info [get]
 func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
-	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
+	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
-		logger.Warnf("cannot parse roomId to int64: %v", err)
+		logger.Warnf("cannot parse roomId to int: %v", err)
 		return fiber.ErrBadRequest
 	}
 	res, err := r.bilic.GetLiveRoomInfo(roomId)
@@ -68,9 +68,9 @@ func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/{roomID}/live [get]
 func (r *Controller) isStreamLiving(ctx fiber.Ctx) error {
-	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
+	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
-		logger.Warnf("cannot parse roomId to int64: %v", err)
+		logger.Warnf("cannot parse roomId to int: %v", err)
 		return fiber.ErrBadRequest
 	}
 	isLive, err := r.bilic.IsStreamLiving(roomId)

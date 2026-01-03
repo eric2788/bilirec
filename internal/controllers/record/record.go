@@ -39,9 +39,9 @@ func NewController(app *fiber.App, service *recorder.Service) *Controller {
 // @Failure 500 {string} string "Internal server error"
 // @Router /record/{roomID}/start [post]
 func (r *Controller) startRecording(ctx fiber.Ctx) error {
-	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
+	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
-		logger.Warnf("cannot parse roomId to int64: %v", err)
+		logger.Warnf("cannot parse roomId to int: %v", err)
 		return fiber.ErrBadRequest
 	}
 	err = r.service.Start(roomId)
@@ -67,9 +67,9 @@ func (r *Controller) startRecording(ctx fiber.Ctx) error {
 // @Failure 400 {string} string "Invalid room ID"
 // @Router /record/{roomID}/stop [post]
 func (r *Controller) stopRecording(ctx fiber.Ctx) error {
-	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
+	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
-		logger.Warnf("cannot parse roomId to int64: %v", err)
+		logger.Warnf("cannot parse roomId to int: %v", err)
 		return fiber.ErrBadRequest
 	}
 	stopped := r.service.Stop(roomId)
@@ -90,9 +90,9 @@ func (r *Controller) stopRecording(ctx fiber.Ctx) error {
 // @Failure 400 {string} string "Invalid room ID"
 // @Router /record/{roomID}/status [get]
 func (r *Controller) getRecordingStatus(ctx fiber.Ctx) error {
-	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
+	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
-		logger.Warnf("cannot parse roomId to int64: %v", err)
+		logger.Warnf("cannot parse roomId to int: %v", err)
 		return fiber.ErrBadRequest
 	}
 	status := r.service.GetStatus(roomId)
@@ -114,9 +114,9 @@ func (r *Controller) getRecordingStatus(ctx fiber.Ctx) error {
 // @Failure 404 {string} string "Recording not found"
 // @Router /record/{roomID}/stats [get]
 func (r *Controller) getRecordingStats(ctx fiber.Ctx) error {
-	roomId, err := strconv.ParseInt(ctx.Params("roomID"), 10, 64)
+	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
-		logger.Warnf("cannot parse roomId to int64: %v", err)
+		logger.Warnf("cannot parse roomId to int: %v", err)
 		return fiber.ErrBadRequest
 	}
 	stats, ok := r.service.GetStats(roomId)

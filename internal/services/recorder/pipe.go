@@ -8,7 +8,7 @@ import (
 	"github.com/eric2788/bilirec/pkg/pipeline"
 )
 
-func (r *Service) newStreamPipeline(roomId int64, info *Recorder) (*pipeline.Pipe[[]byte], error) {
+func (r *Service) newStreamPipeline(roomId int, info *Recorder) (*pipeline.Pipe[[]byte], error) {
 	dirPath := fmt.Sprintf("%s/%d", r.cfg.OutputDir, roomId)
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return nil, err

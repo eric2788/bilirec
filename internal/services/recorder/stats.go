@@ -9,7 +9,7 @@ type Stats struct {
 	ElapsedSeconds int64        `json:"elapsed_seconds"`
 }
 
-func (r *Service) GetStatus(roomId int64) RecordStatus {
+func (r *Service) GetStatus(roomId int) RecordStatus {
 	info, ok := r.recording.Load(roomId)
 	if !ok {
 		return Idle
@@ -20,16 +20,16 @@ func (r *Service) GetStatus(roomId int64) RecordStatus {
 	}
 }
 
-func (r *Service) ListRecording() []int64 {
-	rooms := make([]int64, 0)
-	r.recording.Range(func(key int64, value *Recorder) bool {
+func (r *Service) ListRecording() []int {
+	rooms := make([]int, 0)
+	r.recording.Range(func(key int, value *Recorder) bool {
 		rooms = append(rooms, key)
 		return true
 	})
 	return rooms
 }
 
-func (r *Service) GetStats(roomId int64) (*Stats, bool) {
+func (r *Service) GetStats(roomId int) (*Stats, bool) {
 	info, ok := r.recording.Load(roomId)
 	if !ok {
 		return nil, false

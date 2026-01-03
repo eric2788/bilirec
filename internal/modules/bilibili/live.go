@@ -5,7 +5,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (c *Client) IsStreamLiving(roomID int64) (bool, error) {
+func (c *Client) IsStreamLiving(roomID int) (bool, error) {
 	info, err := c.GetLiveRoomInfo(roomID)
 	if err != nil {
 		return false, err
@@ -13,9 +13,9 @@ func (c *Client) IsStreamLiving(roomID int64) (bool, error) {
 	return info.LiveStatus == 1, nil
 }
 
-func (c *Client) GetLiveRoomInfo(roomId int64) (*bili.LiveRoomInfo, error) {
+func (c *Client) GetLiveRoomInfo(roomId int) (*bili.LiveRoomInfo, error) {
 	info, err := c.Client.GetLiveRoomInfo(bili.GetLiveRoomInfoParam{
-		RoomId: int(roomId),
+		RoomId: roomId,
 	})
 	if err != nil {
 		if IsErrRoomNotFound(err) {

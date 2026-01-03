@@ -283,7 +283,7 @@ func TestRecorder_MemoryLeak_ConcurrentRecordings(t *testing.T) {
 	}
 
 	// Test multiple concurrent recordings
-	testRooms := []int64{1842862714, 1508259} // Add more live rooms if available
+	testRooms := []int{1842862714, 1508259} // Add more live rooms if available
 
 	var recorderService *recorder.Service
 
@@ -305,7 +305,7 @@ func TestRecorder_MemoryLeak_ConcurrentRecordings(t *testing.T) {
 	t.Logf("🔀 Testing concurrent recordings for %d rooms", len(testRooms))
 
 	// Start all recordings
-	startedRooms := []int64{}
+	startedRooms := []int{}
 	for _, room := range testRooms {
 		err := recorderService.Start(room)
 		if err != nil {
