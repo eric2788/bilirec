@@ -35,7 +35,6 @@ var ErrRecordingStarted = fmt.Errorf("recording already started")
 var ErrStreamNotLive = fmt.Errorf("the room is not live streaming")
 var ErrEmptyStreamURLs = fmt.Errorf("no stream urls available")
 var ErrStreamURLsUnreachable = fmt.Errorf("all stream urls are unreachable")
-var ErrMaxRecordingHoursReached = fmt.Errorf("maximum recording hours reached")
 
 type Recorder struct {
 	status     atomic.Pointer[RecordStatus]
@@ -93,7 +92,7 @@ func (r *Service) Start(roomId int) error {
 
 	roomInfo, err := r.bilic.GetLiveRoomInfo(roomId)
 	if err != nil {
-		return fmt.Errorf("cannot check stream living status: %v", err)
+		return err
 	} else if roomInfo.LiveStatus != 1 {
 		return ErrStreamNotLive
 	}
@@ -257,7 +256,7 @@ func (r *Service) recover(roomId int) {
 		}
 		l.Errorf("recovery attempt #%d failed: %v", attempt, err)
 		switch err {
-		case ErrMaxRecordingHoursReached, ErrMaxConcurrentRecordingsReached:
+		case ErrMaxConcurrentRecordingsReached:
 			l.Infof("stop recovery due to: %v", err)
 			r.Stop(roomId)
 			return

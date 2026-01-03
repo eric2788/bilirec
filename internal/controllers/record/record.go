@@ -5,7 +5,6 @@ import (
 
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/services/recorder"
-	"github.com/eric2788/bilirec/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 )
@@ -47,13 +46,22 @@ func (r *Controller) startRecording(ctx fiber.Ctx) error {
 	err = r.service.Start(roomId)
 	if err != nil {
 		logger.Errorf("error starting recording for room %d: %v", roomId, err)
-		return utils.Ternary(
-			bilibili.IsErrRoomNotFound(err),
-			fiber.ErrNotFound,
-			fiber.ErrInternalServerError,
-		)
+		switch err {
+		case bilibili.ErrRoomNotFound:
+			return fiber.ErrNotFound
+		case recorder.ErrEmptyStreamURLs:
+			return fiber.NewError(fiber.StatusBadRequest, "no stream urls available")
+		case recorder.ErrStreamNotLive:
+			return fiber.NewError(fiber.StatusBadRequest, "the room is not live streaming")
+		case recorder.ErrRecordingStarted:
+			return fiber.NewError(fiber.StatusBadRequest, "recording already started")
+		case recorder.ErrMaxConcurrentRecordingsReached:
+			return fiber.NewError(fiber.StatusTooManyRequests, "maximum concurrent recordings reached")
+		default:
+			return fiber.ErrInternalServerError
+		}
 	}
-	return ctx.SendStatus(200)
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 // @Summary Stop recording a live stream
