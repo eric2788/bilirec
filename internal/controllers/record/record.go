@@ -41,22 +41,22 @@ func (r *Controller) startRecording(ctx fiber.Ctx) error {
 	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int: %v", err)
-		return fiber.ErrBadRequest
+		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
 	err = r.service.Start(roomId)
 	if err != nil {
 		logger.Errorf("error starting recording for room %d: %v", roomId, err)
 		switch err {
 		case bilibili.ErrRoomNotFound:
-			return fiber.ErrNotFound
+			return fiber.NewError(fiber.StatusNotFound, "房間不存在")
 		case recorder.ErrEmptyStreamURLs:
-			return fiber.NewError(fiber.StatusBadRequest, "no stream urls available")
+			return fiber.NewError(fiber.StatusBadRequest, "無可用的視頻流 URL")
 		case recorder.ErrStreamNotLive:
-			return fiber.NewError(fiber.StatusBadRequest, "the room is not live streaming")
+			return fiber.NewError(fiber.StatusBadRequest, "房間並非直播狀態")
 		case recorder.ErrRecordingStarted:
-			return fiber.NewError(fiber.StatusBadRequest, "recording already started")
+			return fiber.NewError(fiber.StatusBadRequest, "此房間已經正在錄製中")
 		case recorder.ErrMaxConcurrentRecordingsReached:
-			return fiber.NewError(fiber.StatusTooManyRequests, "maximum concurrent recordings reached")
+			return fiber.NewError(fiber.StatusTooManyRequests, "已達到最大同時錄製數")
 		default:
 			return fiber.ErrInternalServerError
 		}
@@ -78,7 +78,7 @@ func (r *Controller) stopRecording(ctx fiber.Ctx) error {
 	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int: %v", err)
-		return fiber.ErrBadRequest
+		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
 	stopped := r.service.Stop(roomId)
 	return ctx.JSON(fiber.Map{
@@ -101,7 +101,7 @@ func (r *Controller) getRecordingStatus(ctx fiber.Ctx) error {
 	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int: %v", err)
-		return fiber.ErrBadRequest
+		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
 	status := r.service.GetStatus(roomId)
 	return ctx.JSON(fiber.Map{
@@ -125,7 +125,7 @@ func (r *Controller) getRecordingStats(ctx fiber.Ctx) error {
 	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int: %v", err)
-		return fiber.ErrBadRequest
+		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
 	stats, ok := r.service.GetStats(roomId)
 	if !ok {

@@ -75,13 +75,13 @@ func (c *Controller) deleteDir(ctx fiber.Ctx) error {
 func (c *Controller) parseFiberError(err error) error {
 	switch {
 	case os.IsNotExist(err):
-		return fiber.ErrNotFound
+		return fiber.NewError(fiber.StatusNotFound, "file or directory not found")
 	case os.IsPermission(err), err == file.ErrAccessDenied:
-		return fiber.ErrForbidden
+		return fiber.NewError(fiber.StatusForbidden, "forbidden")
 	case err == file.ErrInvalidFilePath:
-		return fiber.ErrBadRequest
+		return fiber.NewError(fiber.StatusBadRequest, "invalid file path")
 	case err == file.ErrIsDirectory:
-		return fiber.ErrBadRequest
+		return fiber.NewError(fiber.StatusBadRequest, "is directory")
 	default:
 		return fiber.ErrInternalServerError
 	}

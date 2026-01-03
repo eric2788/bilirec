@@ -40,7 +40,7 @@ func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int: %v", err)
-		return fiber.ErrBadRequest
+		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
 	res, err := r.bilic.GetLiveRoomInfo(roomId)
 
@@ -48,7 +48,7 @@ func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 		logger.Errorf("error getting room info for room %d: %v", roomId, err)
 		return utils.Ternary(
 			bilibili.IsErrRoomNotFound(err),
-			fiber.ErrNotFound,
+			fiber.NewError(fiber.StatusNotFound, "房間不存在"),
 			fiber.ErrInternalServerError,
 		)
 	}
@@ -71,14 +71,14 @@ func (r *Controller) isStreamLiving(ctx fiber.Ctx) error {
 	roomId, err := strconv.Atoi(ctx.Params("roomID"))
 	if err != nil {
 		logger.Warnf("cannot parse roomId to int: %v", err)
-		return fiber.ErrBadRequest
+		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
 	isLive, err := r.bilic.IsStreamLiving(roomId)
 	if err != nil {
 		logger.Errorf("error checking stream living status for room %d: %v", roomId, err)
 		return utils.Ternary(
 			bilibili.IsErrRoomNotFound(err),
-			fiber.ErrNotFound,
+			fiber.NewError(fiber.StatusNotFound, "房間不存在"),
 			fiber.ErrInternalServerError,
 		)
 	}
