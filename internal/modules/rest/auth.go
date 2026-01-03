@@ -15,10 +15,6 @@ type loginRequest struct {
 	Pass string `json:"pass" form:"pass"`
 }
 
-type loginResponse struct {
-	Token string `json:"token"`
-}
-
 // Login
 // @Summary Login and get JWT token
 // @Tags auth
@@ -40,7 +36,7 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 		user := req.User
 		pass := req.Pass
 
-		if compareUsernameAndPassword(cfg, user, pass) {
+		if !compareUsernameAndPassword(cfg, user, pass) {
 			return fiber.ErrUnauthorized
 		}
 
@@ -75,5 +71,5 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 }
 
 func compareUsernameAndPassword(cfg *config.Config, user, pass string) bool {
-	return subtle.ConstantTimeCompare([]byte(user), []byte(cfg.Username)) != 1 || bcrypt.CompareHashAndPassword([]byte(cfg.PasswordHash), []byte(pass)) != nil
+	return subtle.ConstantTimeCompare([]byte(user), []byte(cfg.Username)) == 1 || bcrypt.CompareHashAndPassword([]byte(cfg.PasswordHash), []byte(pass)) == nil
 }

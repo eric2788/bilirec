@@ -78,11 +78,17 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 		Title:    "BiliRec API Documentation",
 	}))
 
-	if cfg.ProductionMode {
-		app.Use(cors.New(cors.Config{
-			AllowOrigins:     []string{cfg.FrontendURL.String()},
-		}))
-	}
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: utils.Ternary(
+			cfg.ProductionMode,
+			[]string{cfg.FrontendURL.String()},
+			[]string{
+				"http://localhost:3000",
+				"http://127.0.0.1:3000",
+			},
+		),
+		AllowCredentials: true,
+	}))
 
 	if cfg.Username != "" && cfg.PasswordHash != "" {
 		logger.Info("JWT authentication enabled for REST API")
@@ -91,7 +97,7 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 			loginHandler(cfg),
 		)
 		app.Use(jwt.New(jwt.Config{
-			Extractor: extractors.FromCookie(jwtTokenKey),
+			Extractor:  extractors.FromCookie(jwtTokenKey),
 			SigningKey: jwt.SigningKey{Key: []byte(cfg.JwtSecret)},
 			ErrorHandler: func(c fiber.Ctx, err error) error {
 				if errors.Is(err, extractors.ErrNotFound) {
