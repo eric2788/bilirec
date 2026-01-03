@@ -90,10 +90,10 @@ func (r *Service) Start(roomId int64) error {
 		return ErrMaxConcurrentRecordingsReached
 	}
 
-	isLive, err := r.bilic.IsStreamLiving(roomId)
+	roomInfo, err := r.bilic.GetLiveRoomInfo(roomId)
 	if err != nil {
 		return fmt.Errorf("cannot check stream living status: %v", err)
-	} else if !isLive {
+	} else if roomInfo.LiveStatus != 1 {
 		return ErrStreamNotLive
 	}
 

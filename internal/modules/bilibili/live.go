@@ -1,25 +1,38 @@
 package bilibili
 
 import (
-	"strings"
-
 	bili "github.com/CuteReimu/bilibili/v2"
+	"github.com/pkg/errors"
 )
 
 func (c *Client) IsStreamLiving(roomID int64) (bool, error) {
-	info, err := c.GetLiveRoomInfo(bili.GetLiveRoomInfoParam{
-		RoomId: int(roomID),
-	})
+	info, err := c.GetLiveRoomInfo(roomID)
 	if err != nil {
-		// very hardcoded detection, hope author can fix that:
-		if strings.Contains(err.Error(), "cannot unmarshal array into Go struct field commonResp") {
-			return false, ErrRoomNotFound
-		}
 		return false, err
 	}
 	return info.LiveStatus == 1, nil
 }
 
+func (c *Client) GetLiveRoomInfo(roomId int64) (*bili.LiveRoomInfo, error) {
+	info, err := c.Client.GetLiveRoomInfo(bili.GetLiveRoomInfoParam{
+		RoomId: int(roomId),
+	})
+	if err != nil {
+		if IsErrRoomNotFound(err) {
+			return nil, ErrRoomNotFound
+		}
+		return nil, err
+	}
+	return info, nil
+}
+
 func IsErrRoomNotFound(err error) bool {
-	return err == ErrRoomNotFound || strings.Contains(err.Error(), "cannot unmarshal array into Go struct field commonResp") // very hardcoded detection, hope author can fix that:
+	if err == ErrRoomNotFound {
+		return true
+	}
+	cause := errors.Cause(err)
+	if biliErr, ok := cause.(*bili.Error); ok && biliErr.Code == 1 {
+		return true
+	}
+	return false
 }

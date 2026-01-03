@@ -3,7 +3,6 @@ package room
 import (
 	"strconv"
 
-	bili "github.com/CuteReimu/bilibili/v2"
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/gofiber/fiber/v3"
@@ -43,9 +42,7 @@ func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 		logger.Warnf("cannot parse roomId to int64: %v", err)
 		return fiber.ErrBadRequest
 	}
-	res, err := r.bilic.GetLiveRoomInfo(bili.GetLiveRoomInfoParam{
-		RoomId: int(roomId),
-	})
+	res, err := r.bilic.GetLiveRoomInfo(roomId)
 
 	if err != nil {
 		logger.Errorf("error getting room info for room %d: %v", roomId, err)

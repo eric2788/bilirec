@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	bili "github.com/CuteReimu/bilibili/v2"
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/modules/config"
 	"github.com/go-resty/resty/v2"
@@ -59,9 +58,7 @@ func TestGetRoomInfoNotExistRoom(t *testing.T) {
 	app.RequireStart()
 	defer app.RequireStop()
 
-	_, err := client.GetLiveRoomInfo(bili.GetLiveRoomInfoParam{
-		RoomId: 9999999999,
-	})
+	_, err := client.GetLiveRoomInfo(9999999999)
 	if err != nil {
 		if bilibili.IsErrRoomNotFound(err) {
 			t.Log("room not found as expected")

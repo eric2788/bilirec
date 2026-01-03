@@ -3,7 +3,7 @@ module github.com/eric2788/bilirec
 go 1.25.0
 
 require (
-	github.com/CuteReimu/bilibili/v2 v2.5.0
+	github.com/CuteReimu/bilibili/v2 v2.5.1
 	github.com/gofiber/contrib/swagger v1.3.0
 	github.com/gofiber/contrib/v3/jwt v1.0.0-rc.1
 	github.com/gofiber/fiber/v3 v3.0.0-rc.3
@@ -62,7 +62,7 @@ require (
 
 require (
 	github.com/Baozisoftware/qrcode-terminal-go v0.0.0-20170407111555-c0650d8dff0f // indirect
-	github.com/go-resty/resty/v2 v2.16.5
+	github.com/go-resty/resty/v2 v2.17.1
 	github.com/gofiber/contrib/v3/swagger v1.0.0-rc.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/mattn/go-colorable v0.1.14 // indirect
