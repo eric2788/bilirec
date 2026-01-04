@@ -29,10 +29,10 @@ type Service struct {
 }
 
 type Tree struct {
-	Name  string
-	IsDir bool
-	Path  string
-	Size  int64
+	Name  string `json:"name"`
+	IsDir bool   `json:"is_dir"`
+	Path  string `json:"path"`
+	Size  int64  `json:"size"`
 }
 
 func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
@@ -44,11 +44,11 @@ func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
 	return s
 }
 
-func (s *Service) ListTree(path string) ([]*Tree, error) {
+func (s *Service) ListTree(path string) ([]Tree, error) {
 	return s.ListTreeWithFilter(path, func(fs.DirEntry) bool { return true })
 }
 
-func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool) ([]*Tree, error) {
+func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool) ([]Tree, error) {
 	fullPath, err := s.validatePath(path)
 	if err != nil {
 		return nil, err
@@ -62,11 +62,11 @@ func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool)
 	relativePath := strings.TrimPrefix(fullPath, s.cfg.OutputDir)
 	relativePath = strings.TrimPrefix(relativePath, string(os.PathSeparator))
 
-	var files []*Tree
+	var files []Tree
 	for _, entry := range entries {
 		if filter(entry) {
 			entryPath := filepath.Join(relativePath, entry.Name())
-			files = append(files, &Tree{
+			files = append(files, Tree{
 				Name:  entry.Name(),
 				IsDir: entry.IsDir(),
 				Path:  entryPath,

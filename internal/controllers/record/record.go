@@ -71,7 +71,7 @@ func (r *Controller) startRecording(ctx fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
-// @Success 200 {object} map[string]interface{} "Recording stopped"
+// @Success 200 {object} StopResult "Recording stopped"
 // @Failure 400 {string} string "Invalid room ID"
 // @Router /record/{roomID}/stop [post]
 func (r *Controller) stopRecording(ctx fiber.Ctx) error {
@@ -81,9 +81,9 @@ func (r *Controller) stopRecording(ctx fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
 	stopped := r.service.Stop(roomId)
-	return ctx.JSON(fiber.Map{
-		"roomID":  roomId,
-		"success": stopped,
+	return ctx.JSON(StopResult{
+		RoomId:  roomId,
+		Success: stopped,
 	})
 }
 
@@ -94,7 +94,7 @@ func (r *Controller) stopRecording(ctx fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
-// @Success 200 {object} map[string]interface{} "Recording status"
+// @Success 200 {object} Status "Recording status"
 // @Failure 400 {string} string "Invalid room ID"
 // @Router /record/{roomID}/status [get]
 func (r *Controller) getRecordingStatus(ctx fiber.Ctx) error {
@@ -104,9 +104,9 @@ func (r *Controller) getRecordingStatus(ctx fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
 	status := r.service.GetStatus(roomId)
-	return ctx.JSON(fiber.Map{
-		"roomID": roomId,
-		"status": status,
+	return ctx.JSON(Status{
+		RoomId: roomId,
+		Status: status,
 	})
 }
 
@@ -117,7 +117,7 @@ func (r *Controller) getRecordingStatus(ctx fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
-// @Success 200 {object} map[string]interface{} "Recording statistics"
+// @Success 200 {object} recorder.Stats "Recording statistics"
 // @Failure 400 {string} string "Invalid room ID"
 // @Failure 404 {string} string "Recording not found"
 // @Router /record/{roomID}/stats [get]

@@ -32,7 +32,7 @@ func NewController(app *fiber.App, bilic *bilibili.Client) *Controller {
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
-// @Success 200 {object} map[string]interface{} "Room information"
+// @Success 200 {object} LiveRoomInfo "Room information"
 // @Failure 400 {string} string "Invalid room ID"
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/{roomID}/info [get]
@@ -53,7 +53,7 @@ func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 		)
 	}
 
-	return ctx.JSON(res)
+	return ctx.JSON(newLiveRoomInfo(res))
 }
 
 // @Summary Check if stream is live
@@ -63,7 +63,7 @@ func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
-// @Success 200 {object} map[string]interface{} "Live status"
+// @Success 200 {object} LiveInfo "Live status"
 // @Failure 400 {string} string "Invalid room ID"
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/{roomID}/live [get]
@@ -82,8 +82,8 @@ func (r *Controller) isStreamLiving(ctx fiber.Ctx) error {
 			fiber.ErrInternalServerError,
 		)
 	}
-	return ctx.JSON(fiber.Map{
-		"roomID": roomId,
-		"isLive": isLive,
+	return ctx.JSON(LiveInfo{
+		RoomId: roomId,
+		IsLive: isLive,
 	})
 }
