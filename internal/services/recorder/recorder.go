@@ -3,6 +3,7 @@ package recorder
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"sync/atomic"
@@ -50,7 +51,7 @@ type Service struct {
 	st            *stream.Service
 	bilic         *bilibili.Client
 	recording     *xsync.Map[int, *Recorder]
-	occupiedPaths ds.Set[string]
+	writtingFiles ds.Set[string]
 	pipes         *xsync.Map[int, *pipeline.Pipe[[]byte]]
 
 	cfg *config.Config
@@ -70,7 +71,7 @@ func NewService(
 		st:            st,
 		bilic:         bilic,
 		recording:     xsync.NewMap[int, *Recorder](),
-		occupiedPaths: ds.NewSyncedSet[string](),
+		writtingFiles: ds.NewSyncedSet[string](),
 		pipes:         xsync.NewMap[int, *pipeline.Pipe[[]byte]](),
 		cfg:           cfg,
 		ctx:           ctx,
@@ -136,7 +137,7 @@ func (r *Service) Start(roomId int) error {
 			outputPath: outputPath,
 		}
 		info.status.Store(recordingPtr)
-		r.occupiedPaths.Add(outputPath)
+		r.writtingFiles.Add(filepath.Base(outputPath))
 
 		return r.prepare(roomId, ch, ctx, info)
 	}
@@ -314,7 +315,7 @@ func (r *Service) finalize(roomId int, info *Recorder) {
 		logger.Errorf("cannot process final pipeline for room %d: %v", roomId, err)
 		return
 	}
-	r.occupiedPaths.Remove(info.outputPath)
+	r.writtingFiles.Remove(filepath.Base(info.outputPath))
 	logger.Infof("finalized recording for room %d: %s", roomId, output)
 }
 

@@ -3,6 +3,7 @@ package recorder
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -51,17 +52,15 @@ func (r *Service) GetStats(roomId int) (*Stats, bool) {
 }
 
 func (r *Service) IsRecording(path string) bool {
-	return r.occupiedPaths.Contains(path)
+	return r.writtingFiles.Contains(filepath.Base(path))
 }
 
+// only works if the first relative path segment is the room ID
 func (r *Service) IsRecordingUnder(relPath string) bool {
-	// normalize to absolute path based on r.cfg.OutputDir
-	dirAbs, _ := filepath.Abs(filepath.Join(r.cfg.OutputDir, relPath))
-	for _, p := range r.occupiedPaths.ToSlice() {
-		pAbs, _ := filepath.Abs(p)
-		if pAbs == dirAbs || strings.HasPrefix(pAbs, dirAbs+string(os.PathSeparator)) {
-			return true
-		}
+	roomId, err := strconv.Atoi(strings.SplitN(filepath.Clean(relPath), string(os.PathSeparator), 2)[0])
+	if err != nil {
+		return false
 	}
-	return false
+	_, ok := r.recording.Load(roomId)
+	return ok
 }

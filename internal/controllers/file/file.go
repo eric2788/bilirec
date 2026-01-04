@@ -1,6 +1,7 @@
 package file
 
 import (
+	"net/url"
 	"os"
 	"slices"
 
@@ -46,7 +47,11 @@ func NewController(app *fiber.App, fileSvc *file.Service, recorderSvc *recorder.
 // @Failure 404 {string} string "Not found"
 // @Router /files/{path} [get]
 func (c *Controller) listFiles(ctx fiber.Ctx) error {
-	path := ctx.Params("*", "/")
+	raw := ctx.Params("*", "/")
+	path, err := url.PathUnescape(raw)
+	if err != nil {
+		return fiber.ErrBadRequest
+	}
 	trees, err := c.fileSvc.ListTree(path)
 	if err != nil {
 		logger.Warnf("error listing dir at path %s: %v", path, err)
@@ -69,7 +74,11 @@ func (c *Controller) listFiles(ctx fiber.Ctx) error {
 // @Failure 404 {string} string "Not found"
 // @Router /files/{path} [get]
 func (c *Controller) downloadFile(ctx fiber.Ctx) error {
-	path := ctx.Params("*", "/")
+	raw := ctx.Params("*", "/")
+	path, err := url.PathUnescape(raw)
+	if err != nil {
+		return fiber.ErrBadRequest
+	}
 	if c.recorderSvc.IsRecording(path) {
 		return fiber.NewError(fiber.StatusBadRequest, "無法下載正在錄製的文件")
 	}
@@ -121,8 +130,11 @@ func (c *Controller) deleteFiles(ctx fiber.Ctx) error {
 // @Failure 404 {string} string "Not found"
 // @Router /files/{path} [delete]
 func (c *Controller) deleteDir(ctx fiber.Ctx) error {
-	path := ctx.Params("*", "/")
-	if c.recorderSvc.IsRecordingUnder(path) {
+	raw := ctx.Params("*", "/")
+	path, err := url.PathUnescape(raw)
+	if err != nil {
+		return fiber.ErrBadRequest
+	} else if c.recorderSvc.IsRecordingUnder(path) {
 		return fiber.NewError(fiber.StatusBadRequest, "無法刪除包含正在錄製文件的文件夾")
 	} else if err := c.fileSvc.DeleteDirectory(path); err != nil {
 		logger.Warnf("error deleting directory at path %s: %v", path, err)
