@@ -33,8 +33,12 @@ func SanitizeFilename(name string) string {
 }
 
 func TruncateString(s string, maxLen int) string {
-	if len(s) > maxLen {
-		return s[:maxLen]
+	if maxLen <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) > maxLen {
+		return string(runes[:maxLen])
 	}
 	return s
 }
