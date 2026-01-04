@@ -42,6 +42,6 @@ func (r *Service) prepareFilePath(info *bili.LiveRoomInfo, start time.Time) (str
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return "", err
 	}
-	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 50)
+	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 15)
 	return fmt.Sprintf("%s/%s-%d.flv", dirPath, safeTitle, start.Unix()), nil
 }
