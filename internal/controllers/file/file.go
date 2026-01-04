@@ -2,8 +2,10 @@ package file
 
 import (
 	"os"
+	"slices"
 
 	"github.com/eric2788/bilirec/internal/services/file"
+	"github.com/eric2788/bilirec/internal/services/recorder"
 	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
 )
@@ -11,12 +13,14 @@ import (
 var logger = logrus.WithField("controller", "file")
 
 type Controller struct {
-	fileSvc *file.Service
+	fileSvc     *file.Service
+	recorderSvc *recorder.Service
 }
 
-func NewController(app *fiber.App, fileSvc *file.Service) *Controller {
+func NewController(app *fiber.App, fileSvc *file.Service, recorderSvc *recorder.Service) *Controller {
 	fc := &Controller{
-		fileSvc: fileSvc,
+		fileSvc:     fileSvc,
+		recorderSvc: recorderSvc,
 	}
 	files := app.Group("/files")
 
@@ -48,7 +52,7 @@ func (c *Controller) listFiles(ctx fiber.Ctx) error {
 		logger.Warnf("error listing dir at path %s: %v", path, err)
 		return c.parseFiberError(err)
 	}
-	return ctx.JSON(trees)
+	return ctx.JSON(c.withRecordingStatus(trees))
 }
 
 // @Summary Download a file
@@ -66,6 +70,9 @@ func (c *Controller) listFiles(ctx fiber.Ctx) error {
 // @Router /files/{path} [get]
 func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	path := ctx.Params("*", "/")
+	if c.recorderSvc.IsRecording(path) {
+		return fiber.NewError(fiber.StatusBadRequest, "無法下載正在錄製的文件")
+	}
 	format := ctx.Query("format", "flv")
 	f, err := c.fileSvc.GetFileStream(path, format)
 	if err != nil {
@@ -92,8 +99,9 @@ func (c *Controller) deleteFiles(ctx fiber.Ctx) error {
 	var paths []string
 	if err := ctx.Bind().Body(&paths); err != nil {
 		return fiber.ErrBadRequest
-	}
-	if err := c.fileSvc.DeleteFiles(paths...); err != nil {
+	} else if slices.ContainsFunc(paths, c.recorderSvc.IsRecording) {
+		return fiber.NewError(fiber.StatusBadRequest, "要刪除的文件中包含正在錄製的文件")
+	} else if err := c.fileSvc.DeleteFiles(paths...); err != nil {
 		logger.Warnf("error deleting files: %v", err)
 		return c.parseFiberError(err)
 	}
@@ -114,7 +122,9 @@ func (c *Controller) deleteFiles(ctx fiber.Ctx) error {
 // @Router /files/{path} [delete]
 func (c *Controller) deleteDir(ctx fiber.Ctx) error {
 	path := ctx.Params("*", "/")
-	if err := c.fileSvc.DeleteDirectory(path); err != nil {
+	if c.recorderSvc.IsRecordingUnder(path) {
+		return fiber.NewError(fiber.StatusBadRequest, "無法刪除包含正在錄製文件的文件夾")
+	} else if err := c.fileSvc.DeleteDirectory(path); err != nil {
 		logger.Warnf("error deleting directory at path %s: %v", path, err)
 		return c.parseFiberError(err)
 	}
@@ -124,14 +134,25 @@ func (c *Controller) deleteDir(ctx fiber.Ctx) error {
 func (c *Controller) parseFiberError(err error) error {
 	switch {
 	case os.IsNotExist(err):
-		return fiber.NewError(fiber.StatusNotFound, "file or directory not found")
+		return fiber.NewError(fiber.StatusNotFound, "找不到所屬文件夾或檔案")
 	case os.IsPermission(err), err == file.ErrAccessDenied:
-		return fiber.NewError(fiber.StatusForbidden, "forbidden")
+		return fiber.NewError(fiber.StatusForbidden, "無法存取該文件路徑")
 	case err == file.ErrInvalidFilePath:
-		return fiber.NewError(fiber.StatusBadRequest, "invalid file path")
+		return fiber.NewError(fiber.StatusBadRequest, "無效文件路徑")
 	case err == file.ErrIsDirectory:
-		return fiber.NewError(fiber.StatusBadRequest, "is directory")
+		return fiber.NewError(fiber.StatusBadRequest, "此路徑為文件夾")
 	default:
 		return fiber.ErrInternalServerError
 	}
+}
+
+func (c *Controller) withRecordingStatus(tree []file.Tree) []file.Tree {
+	out := make([]file.Tree, len(tree))
+	copy(out, tree)
+	for i := range out {
+		if !out[i].IsDir {
+			out[i].IsRecording = c.recorderSvc.IsRecording(out[i].Path)
+		}
+	}
+	return out
 }
