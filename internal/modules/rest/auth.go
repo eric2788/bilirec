@@ -21,9 +21,9 @@ type loginRequest struct {
 // @Accept json
 // @Produce json
 // @Param credentials body loginRequest true "Login credentials"
-// @Success 200 {object} loginResponse
-// @Failure 400 {object} string
-// @Failure 401 {object} string
+// @Success 200 {string} string "Login successful; JWT token is set in cookie"
+// @Failure 400 {string} string "Bad request"
+// @Failure 401 {string} string "Unauthorized"
 // @Router /login [post]
 func loginHandler(cfg *config.Config) fiber.Handler {
 	return func(c fiber.Ctx) error {

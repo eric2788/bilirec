@@ -25,10 +25,22 @@ func NewController(app *fiber.App, fileSvc *file.Service) *Controller {
 
 	files.Delete("/*", fc.deleteDir)
 	files.Delete("/batch", fc.deleteFiles)
-	
+
 	return fc
 }
 
+// @Summary List files and directories
+// @Description List files and directories under a given path
+// @Tags files
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param path path string false "Relative path"
+// @Success 200 {array} file.Tree "List of files and directories"
+// @Failure 400 {string} string "Invalid path"
+// @Failure 403 {string} string "Forbidden"
+// @Failure 404 {string} string "Not found"
+// @Router /files/{path} [get]
 func (c *Controller) listFiles(ctx fiber.Ctx) error {
 	path := ctx.Params("*", "/")
 	trees, err := c.fileSvc.ListTree(path)
@@ -39,6 +51,19 @@ func (c *Controller) listFiles(ctx fiber.Ctx) error {
 	return ctx.JSON(trees)
 }
 
+// @Summary Download a file
+// @Description Download a file or convert it to the requested format
+// @Tags files
+// @Security BearerAuth
+// @Accept json
+// @Produce octet-stream
+// @Param path path string true "File path"
+// @Param format query string false "Output format (e.g., flv)"
+// @Success 200 {file} binary "File stream"
+// @Failure 400 {string} string "Bad request"
+// @Failure 403 {string} string "Forbidden"
+// @Failure 404 {string} string "Not found"
+// @Router /files/{path} [get]
 func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	path := ctx.Params("*", "/")
 	format := ctx.Query("format", "flv")
@@ -51,6 +76,18 @@ func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	return ctx.SendStream(f)
 }
 
+// @Summary Delete multiple files
+// @Description Delete multiple files by their relative paths
+// @Tags files
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param paths body []string true "List of relative file paths to delete"
+// @Success 204 "No Content"
+// @Failure 400 {string} string "Bad request"
+// @Failure 403 {string} string "Forbidden"
+// @Failure 404 {string} string "Not found"
+// @Router /files/batch [delete]
 func (c *Controller) deleteFiles(ctx fiber.Ctx) error {
 	var paths []string
 	if err := ctx.Bind().Body(&paths); err != nil {
@@ -63,6 +100,18 @@ func (c *Controller) deleteFiles(ctx fiber.Ctx) error {
 	return ctx.SendStatus(fiber.StatusNoContent)
 }
 
+// @Summary Delete a directory
+// @Description Delete a directory and all its contents
+// @Tags files
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param path path string true "Directory path"
+// @Success 204 "No Content"
+// @Failure 400 {string} string "Bad request"
+// @Failure 403 {string} string "Forbidden"
+// @Failure 404 {string} string "Not found"
+// @Router /files/{path} [delete]
 func (c *Controller) deleteDir(ctx fiber.Ctx) error {
 	path := ctx.Params("*", "/")
 	if err := c.fileSvc.DeleteDirectory(path); err != nil {

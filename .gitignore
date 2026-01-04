@@ -1,6 +1,6 @@
 **/secrets/*
 **/records/*
-/docs/*
+**/docs/*
 
 *.mp4
 *.flv
