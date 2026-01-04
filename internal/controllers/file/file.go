@@ -28,8 +28,8 @@ func NewController(app *fiber.App, fileSvc *file.Service, recorderSvc *recorder.
 	files.Get("/*", fc.listFiles)
 	files.Post("/*", fc.downloadFile)
 
-	files.Delete("/*", fc.deleteDir)
 	files.Delete("/batch", fc.deleteFiles)
+	files.Delete("/*", fc.deleteDir)
 
 	return fc
 }
@@ -88,7 +88,6 @@ func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 		logger.Warnf("error getting file stream at path %s: %v", path, err)
 		return c.parseFiberError(err)
 	}
-	defer f.Close()
 	return ctx.SendStream(f)
 }
 
