@@ -13,9 +13,9 @@
 // @in header
 // @name Authorization
 
-// @host 192.168.0.127:2356
+// @host bilirec-api.ericlamm.com
 // @BasePath /
-// @schemes http https
+// @schemes https
 //
 //go:generate swag init -g rest.go -o ../../docs
 package rest
