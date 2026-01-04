@@ -1,12 +1,19 @@
 package recorder
 
-import "time"
+import (
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+)
 
 type Stats struct {
 	BytesWritten   uint64       `json:"bytes_written"`
 	Status         RecordStatus `json:"status"`
 	StartTime      int64        `json:"start_time"`
 	ElapsedSeconds int64        `json:"elapsed_seconds"`
+	OutputPath     string       `json:"output_path"`
 }
 
 func (r *Service) GetStatus(roomId int) RecordStatus {
@@ -40,5 +47,20 @@ func (r *Service) GetStats(roomId int) (*Stats, bool) {
 		Status:         status,
 		StartTime:      info.startTime.Unix(),
 		ElapsedSeconds: int64(time.Since(info.startTime).Seconds()),
+		OutputPath:     info.outputPath,
 	}, true
+}
+
+func (r *Service) IsRecording(path string) bool {
+	return r.writtingFiles.Contains(filepath.Base(path))
+}
+
+// only works if the first relative path segment is the room ID
+func (r *Service) IsRecordingUnder(relPath string) bool {
+	roomId, err := strconv.Atoi(strings.SplitN(filepath.Clean(relPath), string(os.PathSeparator), 2)[0])
+	if err != nil {
+		return false
+	}
+	_, ok := r.recording.Load(roomId)
+	return ok
 }

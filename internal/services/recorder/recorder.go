@@ -3,6 +3,7 @@ package recorder
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"sync/atomic"
@@ -11,6 +12,7 @@ import (
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/modules/config"
 	"github.com/eric2788/bilirec/internal/services/stream"
+	"github.com/eric2788/bilirec/pkg/ds"
 	"github.com/eric2788/bilirec/pkg/pipeline"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/puzpuzpuz/xsync/v4"
@@ -46,10 +48,11 @@ type Recorder struct {
 }
 
 type Service struct {
-	st        *stream.Service
-	bilic     *bilibili.Client
-	recording *xsync.Map[int, *Recorder]
-	pipes     *xsync.Map[int, *pipeline.Pipe[[]byte]]
+	st            *stream.Service
+	bilic         *bilibili.Client
+	recording     *xsync.Map[int, *Recorder]
+	writtingFiles ds.Set[string]
+	pipes         *xsync.Map[int, *pipeline.Pipe[[]byte]]
 
 	cfg *config.Config
 	ctx context.Context
@@ -65,12 +68,13 @@ func NewService(
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &Service{
-		st:        st,
-		bilic:     bilic,
-		recording: xsync.NewMap[int, *Recorder](),
-		pipes:     xsync.NewMap[int, *pipeline.Pipe[[]byte]](),
-		cfg:       cfg,
-		ctx:       ctx,
+		st:            st,
+		bilic:         bilic,
+		recording:     xsync.NewMap[int, *Recorder](),
+		writtingFiles: ds.NewSyncedSet[string](),
+		pipes:         xsync.NewMap[int, *pipeline.Pipe[[]byte]](),
+		cfg:           cfg,
+		ctx:           ctx,
 	}
 
 	go s.backgroundMaintenance(ctx)
@@ -133,6 +137,7 @@ func (r *Service) Start(roomId int) error {
 			outputPath: outputPath,
 		}
 		info.status.Store(recordingPtr)
+		r.writtingFiles.Add(filepath.Base(outputPath))
 
 		return r.prepare(roomId, ch, ctx, info)
 	}
@@ -310,6 +315,7 @@ func (r *Service) finalize(roomId int, info *Recorder) {
 		logger.Errorf("cannot process final pipeline for room %d: %v", roomId, err)
 		return
 	}
+	r.writtingFiles.Remove(filepath.Base(info.outputPath))
 	logger.Infof("finalized recording for room %d: %s", roomId, output)
 }
 

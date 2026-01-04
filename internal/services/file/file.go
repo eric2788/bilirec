@@ -29,10 +29,11 @@ type Service struct {
 }
 
 type Tree struct {
-	Name  string `json:"name"`
-	IsDir bool   `json:"is_dir"`
-	Path  string `json:"path"`
-	Size  int64  `json:"size"`
+	Name        string `json:"name"`
+	IsDir       bool   `json:"is_dir"`
+	Path        string `json:"path"`
+	Size        int64  `json:"size"`
+	IsRecording bool   `json:"is_recording,omitempty"`
 }
 
 func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
@@ -59,10 +60,12 @@ func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool)
 		return nil, err
 	}
 
-	relativePath := strings.TrimPrefix(fullPath, s.cfg.OutputDir)
-	relativePath = strings.TrimPrefix(relativePath, string(os.PathSeparator))
+	relativePath, err := s.getRelativePath(fullPath)
+	if err != nil {
+		return nil, err
+	}
 
-	var files []Tree
+	files := make([]Tree, 0)
 	for _, entry := range entries {
 		if filter(entry) {
 			entryPath := filepath.Join(relativePath, entry.Name())
@@ -168,4 +171,20 @@ func (s *Service) validatePath(path string) (string, error) {
 	}
 
 	return fullPathAbs, nil
+}
+
+func (s *Service) getRelativePath(fullPath string) (string, error) {
+	baseAbs, err := filepath.Abs(s.cfg.OutputDir)
+	if err != nil {
+		return "", err
+	}
+
+	rel, err := filepath.Rel(baseAbs, fullPath)
+	if err != nil {
+		return "", err
+	}
+	if rel == "." {
+		rel = ""
+	}
+	return rel, nil
 }
