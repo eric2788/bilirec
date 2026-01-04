@@ -25,6 +25,7 @@ type Config struct {
 	ConvertFLVToMp4       bool
 	DeleteFlvAfterConvert bool
 
+	BackendHost  string
 	FrontendURL  *url.URL
 	Username     string
 	PasswordHash string
@@ -81,6 +82,7 @@ func provider() (*Config, error) {
 		ConvertFLVToMp4:         os.Getenv("CONVERT_FLV_TO_MP4") == "true",
 		DeleteFlvAfterConvert:   os.Getenv("DELETE_FLV_AFTER_CONVERT") == "true",
 		FrontendURL:             url,
+		BackendHost:             utils.EmptyOrElse(os.Getenv("BACKEND_HOST"), "localhost:8080"),
 		Username:                username,
 		PasswordHash:            string(passwordHash),
 		JwtSecret:               utils.EmptyOrElse(os.Getenv("JWT_SECRET"), "bilirec_secret"),
