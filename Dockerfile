@@ -27,6 +27,8 @@ RUN --mount=type=cache,target=/gomod-cache \
 FROM alpine:latest
 WORKDIR /app
 
+RUN apk update && apk add --no-cache ffmpeg
+
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=build /app/bilirec .
 COPY --from=build /app/docs ./docs
