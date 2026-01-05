@@ -4,24 +4,22 @@ WORKDIR /app
 
 RUN apk add --no-cache tzdata
 
-ENV GOMODCACHE=/gomod-cache
-ENV GOCACHE=/go-cache
-
 COPY go.mod go.sum ./
 
-RUN --mount=type=cache,target=/gomod-cache \
+RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go install github.com/swaggo/swag/cmd/swag@v1.16.6
 
 COPY . .
 
-RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    /go/bin/swag init -g internal/modules/rest/rest.go -o docs
 
-RUN --mount=type=cache,target=/gomod-cache \
-    --mount=type=cache,target=/go-cache \
-    $(go env GOPATH)/bin/swag init -g internal/modules/rest/rest.go -o docs
-
-RUN --mount=type=cache,target=/gomod-cache \
-    --mount=type=cache,target=/go-cache \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
     go build -v -o bilirec
 
 FROM alpine:latest
@@ -36,9 +34,6 @@ RUN chmod +x ./bilirec
 
 ENV TZ=Asia/Hong_Kong
 
-# Application environment variables (can be overridden at runtime)
-# Defaults reflect values used in internal/modules/config/provider
-# Secret Values are hidded please refer to internal/modules/config/provider
 ENV ANONYMOUS_LOGIN=false \
     PORT=8080 \
     MAX_CONCURRENT_RECORDINGS=3 \
@@ -50,8 +45,5 @@ ENV ANONYMOUS_LOGIN=false \
 
 ENV GOMEMLIMIT=256MiB
 ENV GOGC=50
-
-# VOLUMES [ "/app/secrets", "/app/records" ]
-# EXPOSE 8080
 
 ENTRYPOINT ["./bilirec"]
