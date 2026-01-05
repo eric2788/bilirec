@@ -155,7 +155,7 @@ func TestDownloadStream(t *testing.T) {
 	f.WriteString(utils.RandomHexStringMust(512))
 	f.Close() // must close so that file service can access it
 
-	reader, err := fileService.GetFileStream("test.flv", "flv")
+	reader, _, err := fileService.GetFileStream("test.flv", "flv")
 	if err != nil {
 		t.Fatalf("failed to get file stream: %v", err)
 	}

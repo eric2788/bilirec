@@ -42,3 +42,22 @@ func TruncateString(s string, maxLen int) string {
 	}
 	return s
 }
+
+func AsciiFallback(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		if r == '"' || r == '\\' || r < 0x20 {
+			continue
+		}
+		if r > 127 {
+			b.WriteByte('?')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	s := strings.ReplaceAll(b.String(), "/", "-")
+	if s == "" {
+		s = "file"
+	}
+	return s
+}
