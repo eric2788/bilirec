@@ -25,8 +25,8 @@ func NewController(app *fiber.App, fileSvc *file.Service, recorderSvc *recorder.
 	}
 	files := app.Group("/files")
 
-	files.Get("/*", fc.listFiles)
-	files.Post("/*", fc.downloadFile)
+	files.Get("/browse/*", fc.listFiles)
+	files.Get("/download/*", fc.downloadFile)
 
 	files.Delete("/batch", fc.deleteFiles)
 	files.Delete("/*", fc.deleteDir)
@@ -45,7 +45,7 @@ func NewController(app *fiber.App, fileSvc *file.Service, recorderSvc *recorder.
 // @Failure 400 {string} string "Invalid path"
 // @Failure 403 {string} string "Forbidden"
 // @Failure 404 {string} string "Not found"
-// @Router /files/{path} [get]
+// @Router /files/browse/{path} [get]
 func (c *Controller) listFiles(ctx fiber.Ctx) error {
 	raw := ctx.Params("*", "/")
 	path, err := url.PathUnescape(raw)
@@ -72,7 +72,7 @@ func (c *Controller) listFiles(ctx fiber.Ctx) error {
 // @Failure 400 {string} string "Bad request"
 // @Failure 403 {string} string "Forbidden"
 // @Failure 404 {string} string "Not found"
-// @Router /files/{path} [get]
+// @Router /files/download/{path} [get]
 func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	raw := ctx.Params("*", "/")
 	path, err := url.PathUnescape(raw)
