@@ -61,10 +61,17 @@ go build -o bilirec main.go
 | `PORT` | API 服务端口 | `8080` |
 | `MAX_CONCURRENT_RECORDINGS` | 最大同时录制数 | `3` |
 | `MAX_RECORDING_HOURS` | 单次录制最长时间（小时） | `5` |
+| `MAX_RECOVERY_ATTEMPTS` | 单次录制的最大重连尝试次数 | `5` |
 | `OUTPUT_DIR` | 录制文件保存目录 | `records` |
 | `SECRET_DIR` | Cookie 和 Token 保存目录 | `secrets` |
+| `CONVERT_FLV_TO_MP4` | 在下载时是否将 FLV 转为 MP4 | `false` |
+| `DELETE_FLV_AFTER_CONVERT` | 转换后是否删除原始 FLV 文件 | `false` |
+| `BACKEND_HOST` | 后端主机（用于生成Cookie域名） | `localhost:8080` |
 | `FRONTEND_URL` | 前端 URL（用于 CORS 与 cookie 域） | `http://localhost:8080` |
+| `USERNAME` | 可选：启用用户名/密码认证时的用户名 | (未设置) |
+| `PASSWORD` | 可选：启用用户名/密码认证时的密码 | (未设置) |
 | `JWT_SECRET` | JWT 签名密钥 | `bilirec_secret` |
+| `DEBUG` | 启用调试模式（会开启 pprof 和临时 hex token） | `false` |
 | `PRODUCTION_MODE` | 启用生产模式（影响 cookie 与 CORS） | `false` |
 
 ### 示例配置
@@ -74,10 +81,18 @@ export ANONYMOUS_LOGIN=false
 export PORT=8080
 export MAX_CONCURRENT_RECORDINGS=5
 export MAX_RECORDING_HOURS=10
+export MAX_RECOVERY_ATTEMPTS=5
 export OUTPUT_DIR=/path/to/records
 export SECRET_DIR=/path/to/secrets
+export CONVERT_FLV_TO_MP4=false
+export DELETE_FLV_AFTER_CONVERT=false
+export BACKEND_HOST=localhost:8080
 export FRONTEND_URL=http://localhost:8080
 export JWT_SECRET=bilirec_secret
+export DEBUG=false
+# 可选：启用 REST API 认证
+export USERNAME=admin
+export PASSWORD=changeme
 export PRODUCTION_MODE=false
 ```
 
@@ -94,6 +109,19 @@ export PRODUCTION_MODE=false
 ### API 接口
 
 > Swagger UI 会在服务器运行时于根路径 `/` 提供 — 在浏览器中打开该地址即可查看与测试 API。
+
+#### 认证
+
+如果设置了 `USERNAME` 与 `PASSWORD`，REST API 会启用基于 JWT 的认证（登录会在 cookie 中设置 `jwtToken`）。使用：
+
+```http
+POST /login
+Content-Type: application/json
+
+{ "user": "<username>", "pass": "<password>" }
+```
+
+登录成功后会在响应中设置 JWT cookie（键名 `jwtToken`），随后对需要认证的接口请携带该 cookie。若未设置用户名/密码，API 默认为公开访问。
 
 #### 录制管理
 
@@ -136,14 +164,29 @@ export PRODUCTION_MODE=false
 
 - **列出文件**
   ```
-  GET /files/*
+  GET /files/browse/*
   ```
 
 - **下载文件**
   ```
-  POST /files/*
+  GET /files/download/*
   ```
   可选查询参数：`?format=mp4`（或其他支持的格式）用于在流式传输时转换文件格式。
+
+- **删除多个文件**
+  ```
+  DELETE /files/batch
+  ```
+  请求体：JSON 数组，包含要删除的相对文件路径，示例：
+
+  ```json
+  ["room123/20250101.flv", "room456/20250102.flv"]
+  ```
+
+- **删除目录**
+  ```
+  DELETE /files/{path}
+  ```
 
 #### 房间信息
 
@@ -159,23 +202,29 @@ export PRODUCTION_MODE=false
 
 ```
 .
-├── main.go                          # 程序入口
+├── .github/                          # CI / workflows (maintenance)
+├── Dockerfile                        # Docker 镜像构建文件
 ├── internal/
-│   ├── controllers/                 # HTTP 控制器
-│   │   ├── file/                    # 文件管理
-│   │   ├── record/                  # 录制管理
-│   │   └── room/                    # 房间信息
-│   ├── modules/                     # 核心模块
-│   │   ├── bilibili/                # Bilibili API 封装
-│   │   ├── config/                  # 配置管理
-│   │   └── rest/                    # REST 服务
-│   └── services/                    # 业务逻辑
-│       ├── file/                    # 文件服务
-│       ├── recorder/                # 录制服务
-│       └── stream/                  # 流处理服务
-├── pkg/
-│   └── pool/                        # 缓冲池
-└── utils/                           # 工具函数
+│   ├── controllers/                  # HTTP 控制器
+│   │   ├── file/                     # 文件管理
+│   │   ├── record/                   # 录制管理
+│   │   └── room/                     # 房间信息
+│   ├── modules/                      # 核心模块
+│   │   ├── bilibili/                 # Bilibili API 封装
+│   │   ├── config/                   # 配置管理
+│   │   └── rest/                     # REST 服务（包含 Swagger / pprof）
+│   └── services/                     # 业务逻辑
+│       ├── file/                     # 文件服务
+│       ├── recorder/                 # 录制服务
+│       └── stream/                   # 流处理服务
+├── pkg/                              # 底层库与工具
+│   ├── ds/
+│   ├── flv/
+│   ├── pipeline/
+│   └── pool/
+├── utils/                            # 工具函数
+├── LICENSE
+└── README.md
 ```
 
 ## 核心实现
@@ -184,15 +233,20 @@ export PRODUCTION_MODE=false
 
 1. 通过 [`bilibili.Client`](internal/modules/bilibili/bilibili.go) 获取直播流地址
 2. 使用 [`stream.Service`](internal/services/stream/stream.go) 读取流数据
-3. [`recorder.Service`](internal/services/recorder/recorder.go) 管理录制任务
-4. 数据写入到 FLV 文件，保存在配置的输出目录
+3. [`recorder.Service`](internal/services/recorder/recorder.go) 管理录制任务（自动重连与恢复）
+4. 数据写入到 FLV 文件，保存在配置的输出目录；可在下载时选择将 FLV 转换为 MP4（受 `CONVERT_FLV_TO_MP4` 控制）
 
 ### 关键特性
 
 - **自动恢复**: 当流中断时自动重连，详见 [`recorder.Service`](internal/services/recorder/recorder.go)
 - **缓冲池**: 使用 [`pool.BufferPool`](pkg/pool/pool.go) 减少内存分配
 - **定期刷盘**: 每 5 秒自动刷新写入缓冲，防止数据丢失
-- **低资源占用**: 设计注重低内存和低 CPU 使用，适合树莓派等资源受限设备。
+- **低资源占用**: 设计注重低内存和低 CPU 使用，适合树莓派等资源受限设备
+- **文件管理**: 支持列出、预览、下载（可转换格式）、批量删除文件及删除目录，详见 `internal/controllers/file/file.go`
+- **下载转换**: 如果启用 `CONVERT_FLV_TO_MP4`，下载时会将 FLV 转为 MP4；可通过 `DELETE_FLV_AFTER_CONVERT` 控制是否删除原始 FLV
+- **实时修复（Realtime Fixer）**: 在流式写入场景下逐个修复 FLV Tag 的时间戳并输出，包含重复 Tag 去重（可查询去重统计），并通过内存池、去重缓存与周期清理来保持低延迟与低内存占用，适合边录制边推送或实时下载的场景。
+- **REST API 文档**: Swagger UI 在根路径 `/` 提供（由 `swag` 生成，参见 `internal/modules/rest`）
+- **认证与调试**: 可选用户名/密码登录（设置 `USERNAME` 和 `PASSWORD`）启用 JWT 认证；调试模式下可通过 `/debug/pprof` 访问 pprof（受临时 token 或基本 auth 保护）
 - **Cookie 管理**: 自动刷新 Bilibili Cookie 保持登录状态
 
 ## 依赖项
