@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strconv"
 
 	"github.com/eric2788/bilirec/internal/services/file"
 	"github.com/eric2788/bilirec/internal/services/recorder"
@@ -83,11 +84,16 @@ func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "無法下載正在錄製的文件")
 	}
 	format := ctx.Query("format", "flv")
-	f, err := c.fileSvc.GetFileStream(path, format)
+	f, info, err := c.fileSvc.GetFileStream(path, format)
 	if err != nil {
 		logger.Warnf("error getting file stream at path %s: %v", path, err)
 		return c.parseFiberError(err)
 	}
+
+	ctx.Set(fiber.HeaderContentDisposition, "attachment; filename*=UTF-8''"+url.PathEscape(info.Name()))
+	ctx.Set(fiber.HeaderContentType, "application/octet-stream")
+	ctx.Set(fiber.HeaderContentLength, strconv.FormatInt(info.Size(), 10))
+
 	return ctx.SendStream(f)
 }
 

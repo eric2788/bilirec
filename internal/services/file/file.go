@@ -37,11 +37,14 @@ type Tree struct {
 }
 
 func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
-	s := &Service{cfg: cfg}
-	ls.Append(fx.StartHook(func(ctx context.Context) error {
-		s.ctx = ctx
-		return nil
-	}))
+	ctx, cancel := context.WithCancel(context.Background())
+
+	s := &Service{
+		cfg: cfg,
+		ctx: ctx,
+	}
+
+	ls.Append(fx.StopHook(cancel))
 	return s
 }
 
@@ -85,42 +88,48 @@ func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool)
 	return files, nil
 }
 
-func (s *Service) GetFileStream(path, format string) (io.ReadCloser, error) {
+func (s *Service) GetFileStream(path, format string) (io.ReadCloser, os.FileInfo, error) {
 	fullPath, err := s.validatePath(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if info.IsDir() {
-		return nil, ErrIsDirectory
+		return nil, nil, ErrIsDirectory
 	}
 
 	if format == "" || strings.HasSuffix(fullPath, "."+format) {
-		return os.Open(fullPath)
+		if f, err := os.Open(fullPath); err != nil {
+			return nil, nil, err
+		} else {
+			return f, info, nil
+		}
 	}
 
 	processor := pipeline.New(processors.NewFileConverter(format))
 
 	if err := processor.Open(s.ctx); err != nil {
-		return nil, fmt.Errorf("failed to open file converter: %v", err)
+		return nil, nil, fmt.Errorf("failed to open file converter: %v", err)
 	}
 	defer processor.Close()
 
 	dest, err := processor.Process(s.ctx, fullPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert file: %v", err)
+		return nil, nil, fmt.Errorf("failed to convert file: %v", err)
 	}
 
 	destFile, err := os.Open(dest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open converted file: %v", err)
+		return nil, nil, fmt.Errorf("failed to open converted file: %v", err)
 	}
 
-	return NewTempReader(destFile), nil
+	destInfo, err := destFile.Stat()
+	
+	return NewTempReader(destFile), destInfo, err
 }
 
 func (s *Service) DeleteDirectory(path string) error {
