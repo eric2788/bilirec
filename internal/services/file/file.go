@@ -10,8 +10,6 @@ import (
 	"strings"
 
 	"github.com/eric2788/bilirec/internal/modules/config"
-	"github.com/eric2788/bilirec/internal/processors"
-	"github.com/eric2788/bilirec/pkg/pipeline"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/fx"
 )
@@ -49,7 +47,9 @@ func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
 }
 
 func (s *Service) ListTree(path string) ([]Tree, error) {
-	return s.ListTreeWithFilter(path, func(fs.DirEntry) bool { return true })
+	return s.ListTreeWithFilter(path, func(f fs.DirEntry) bool {
+		return !strings.HasSuffix(f.Name(), ".tmp") // ignore .tmp files
+	})
 }
 
 func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool) ([]Tree, error) {
@@ -88,7 +88,7 @@ func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool)
 	return files, nil
 }
 
-func (s *Service) GetFileStream(path, format string) (io.ReadCloser, os.FileInfo, error) {
+func (s *Service) GetFileStream(path string) (io.ReadCloser, os.FileInfo, error) {
 	fullPath, err := s.validatePath(path)
 	if err != nil {
 		return nil, nil, err
@@ -102,34 +102,11 @@ func (s *Service) GetFileStream(path, format string) (io.ReadCloser, os.FileInfo
 		return nil, nil, ErrIsDirectory
 	}
 
-	if format == "" || strings.HasSuffix(fullPath, "."+format) {
-		if f, err := os.Open(fullPath); err != nil {
-			return nil, nil, err
-		} else {
-			return f, info, nil
-		}
+	if f, err := os.Open(fullPath); err != nil {
+		return nil, nil, err
+	} else {
+		return f, info, nil
 	}
-
-	processor := pipeline.New(processors.NewFileConverter(format))
-
-	if err := processor.Open(s.ctx); err != nil {
-		return nil, nil, fmt.Errorf("failed to open file converter: %v", err)
-	}
-	defer processor.Close()
-
-	dest, err := processor.Process(s.ctx, fullPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to convert file: %v", err)
-	}
-
-	destFile, err := os.Open(dest)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to open converted file: %v", err)
-	}
-
-	destInfo, err := destFile.Stat()
-	
-	return NewTempReader(destFile), destInfo, err
 }
 
 func (s *Service) DeleteDirectory(path string) error {

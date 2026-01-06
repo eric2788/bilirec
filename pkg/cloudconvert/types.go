@@ -15,32 +15,17 @@ type VideoConvertPayload struct {
 }
 
 type ConvertTaskResponse struct {
-	Data ConvertTaskData `json:"data"`
-}
-
-type ConvertTaskData struct {
-	ID             string                 `json:"id"`
-	Operation      string                 `json:"operation"`
-	Status         string                 `json:"status"`
-	Message        *string                `json:"message"`
-	CreatedAt      string                 `json:"created_at"`
-	StartedAt      string                 `json:"started_at"`
-	EndedAt        *string                `json:"ended_at"`
-	DependsOnTasks map[string]interface{} `json:"depends_on_tasks"`
-	Engine         string                 `json:"engine"`
-	EngineVersion  string                 `json:"engine_version"`
-	Payload        map[string]interface{} `json:"payload"`
-	Result         interface{}            `json:"result"`
+	Data TaskData `json:"data"`
 }
 
 type ImportExportBaseData struct {
-	ID        string  `json:"id"`
-	Operation string  `json:"operation"`
-	Status    string  `json:"status"`
-	Message   *string `json:"message"`
-	CreatedAt string  `json:"created_at"`
-	StartedAt string  `json:"started_at"`
-	EndedAt   string  `json:"ended_at"`
+	ID        string     `json:"id"`
+	Operation string     `json:"operation"`
+	Status    TaskStatus `json:"status"`
+	Message   *string    `json:"message"`
+	CreatedAt string     `json:"created_at"`
+	StartedAt string     `json:"started_at"`
+	EndedAt   string     `json:"ended_at"`
 }
 
 type ImportUploadRequest struct {
@@ -73,23 +58,14 @@ type ExportURLRequest struct {
 	Inline               bool `json:"inline,omitempty"`
 }
 
-type ExportURLResponse struct {
-	Data ExportURLData `json:"data"`
-}
+type TaskStatus string
 
-type ExportURLData struct {
-	ImportExportBaseData
-	Result ExportURLResult `json:"result"`
-}
-
-type ExportURLResult struct {
-	Files []ExportedFile `json:"files"`
-}
-
-type ExportedFile struct {
-	Filename string `json:"filename"`
-	URL      string `json:"url"`
-}
+const (
+	TaskStatusWaiting    TaskStatus = "waiting"
+	TaskStatusProcessing TaskStatus = "processing"
+	TaskStatusFinished   TaskStatus = "finished"
+	TaskStatusError      TaskStatus = "error"
+)
 
 type TaskResponse struct {
 	Data TaskData `json:"data"`
@@ -105,7 +81,7 @@ type TaskData struct {
 	ID             string            `json:"id"`
 	JobID          string            `json:"job_id"`
 	Operation      string            `json:"operation"`
-	Status         string            `json:"status"`
+	Status         TaskStatus        `json:"status"`
 	Credits        *int              `json:"credits"`
 	Message        *string           `json:"message"`
 	Code           *string           `json:"code"`
@@ -137,6 +113,7 @@ type TaskListMeta struct {
 type TaskPayload struct {
 	InputFormat   string `json:"input_format"`
 	OutputFormat  string `json:"output_format"`
+	Pages         string `json:"pages"`
 	PageRange     string `json:"page_range"`
 	OptimizePrint bool   `json:"optimize_print"`
 }
@@ -156,4 +133,6 @@ type TaskResult struct {
 
 type TaskResultFile struct {
 	Filename string `json:"filename"`
+	Size     int64  `json:"size"`
+	URL      string `json:"url"`
 }

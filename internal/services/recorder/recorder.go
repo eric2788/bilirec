@@ -3,14 +3,18 @@ package recorder
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
 
+	bili "github.com/CuteReimu/bilibili/v2"
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/modules/config"
+	"github.com/eric2788/bilirec/internal/processors"
+	"github.com/eric2788/bilirec/internal/services/convert"
 	"github.com/eric2788/bilirec/internal/services/stream"
 	"github.com/eric2788/bilirec/pkg/ds"
 	"github.com/eric2788/bilirec/pkg/pipeline"
@@ -49,6 +53,7 @@ type Recorder struct {
 
 type Service struct {
 	st            *stream.Service
+	cv            *convert.Service
 	bilic         *bilibili.Client
 	recording     *xsync.Map[int, *Recorder]
 	writtingFiles ds.Set[string]
@@ -61,6 +66,7 @@ type Service struct {
 func NewService(
 	lc fx.Lifecycle,
 	st *stream.Service,
+	cv *convert.Service,
 	bilic *bilibili.Client,
 	cfg *config.Config,
 ) *Service {
@@ -69,6 +75,7 @@ func NewService(
 
 	s := &Service{
 		st:            st,
+		cv:            cv,
 		bilic:         bilic,
 		recording:     xsync.NewMap[int, *Recorder](),
 		writtingFiles: ds.NewSyncedSet[string](),
@@ -76,6 +83,8 @@ func NewService(
 		cfg:           cfg,
 		ctx:           ctx,
 	}
+
+	cv.SetActiveRecordingsGetter(s.recording.Size)
 
 	go s.backgroundMaintenance(ctx)
 	lc.Append(fx.StopHook(cancel))
@@ -166,10 +175,14 @@ func (r *Service) Stop(roomId int) bool {
 }
 
 func (r *Service) prepare(roomId int, ch <-chan []byte, ctx context.Context, info *Recorder) error {
-	pipe, err := r.newStreamPipeline(info.outputPath)
-	if err != nil {
-		return fmt.Errorf("cannot create pipeline: %v", err)
-	}
+
+	pipe := pipeline.New(
+		// fix FLV stream
+		processors.NewFlvStreamFixer(),
+		// write to file with buffered writer
+		// flushes every 5 seconds then writes to disk
+		processors.NewBufferedStreamWriter(info.outputPath),
+	)
 
 	startCtx, startCancel := context.WithTimeout(ctx, 10*time.Second)
 	if err := pipe.Open(startCtx); err != nil {
@@ -300,23 +313,22 @@ func (r *Service) finalize(roomId int, info *Recorder) {
 		logger.Warnf("skipping finalize for room %d: no recording info", roomId)
 		return
 	}
-	finalPipe, err := r.newFinalPipeline()
-	if err != nil {
-		logger.Errorf("cannot create final pipeline for room %d: %v", roomId, err)
+
+	defer r.writtingFiles.Remove(filepath.Base(info.outputPath))
+
+	if !r.cfg.ConvertFLVToMp4 {
+		logger.Debug("no need to convert flv to mp4, skipped")
 		return
 	}
-	if err := finalPipe.Open(r.ctx); err != nil {
-		logger.Errorf("cannot open final pipeline for room %d: %v", roomId, err)
-		return
+
+	// process finalization via convert service
+	if queue, err := r.cv.Enqueue(info.outputPath, "mp4", r.cfg.DeleteFlvAfterConvert); err != nil {
+		logger.Errorf("failed to enqueue conversion for room %d: %v", roomId, err)
+		logger.Warnf("you may need to convert mp4 manually for room: %d", roomId)
+	} else {
+		logger.Infof("enqueued convertion for room %d: %s", roomId, queue.TaskID)
+		logger.Infof("the output path will be: %s", queue.OutputPath)
 	}
-	defer finalPipe.Close()
-	output, err := finalPipe.Process(r.ctx, info.outputPath)
-	if err != nil {
-		logger.Errorf("cannot process final pipeline for room %d: %v", roomId, err)
-		return
-	}
-	r.writtingFiles.Remove(filepath.Base(info.outputPath))
-	logger.Infof("finalized recording for room %d: %s", roomId, output)
 }
 
 func (r *Service) backgroundMaintenance(ctx context.Context) {
@@ -357,4 +369,14 @@ func (r *Service) backgroundMaintenance(ctx context.Context) {
 			return
 		}
 	}
+}
+
+// the time should be the time you start the record, not live start
+func (r *Service) prepareFilePath(info *bili.LiveRoomInfo, start time.Time) (string, error) {
+	dirPath := fmt.Sprintf("%s/%d", r.cfg.OutputDir, info.RoomId)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		return "", err
+	}
+	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 15)
+	return fmt.Sprintf("%s/%s-%d.flv", dirPath, safeTitle, start.Unix()), nil
 }

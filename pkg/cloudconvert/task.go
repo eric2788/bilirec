@@ -2,6 +2,7 @@ package cloudconvert
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -58,26 +59,56 @@ func (c *Client) ListTasks(f *TaskListFilter) (*TaskListResponse, error) {
 	return &taskListRes, nil
 }
 
-func (c *Client) CancelTask(taskID string) error {
+func (c *Client) CancelTask(taskID string) (bool, error) {
 	req := c.client.R().
 		SetContext(c.ctx).
 		SetPathParam("id", taskID)
-	_, err := req.Post("/tasks/{id}/cancel")
-	return err
+	res, err := req.Post("/tasks/{id}/cancel")
+	if err != nil {
+		return false, err
+	}
+	switch res.StatusCode() {
+	case 200, 204:
+		return true, nil
+	case 404:
+		return false, nil
+	default:
+		return false, fmt.Errorf("%d: %s", res.StatusCode(), res.String())
+	}
 }
 
-func (c *Client) RetryTask(taskID string) error {
+func (c *Client) RetryTask(taskID string) (bool, error) {
 	req := c.client.R().
 		SetContext(c.ctx).
 		SetPathParam("id", taskID)
-	_, err := req.Post("/tasks/{id}/retry")
-	return err
+	res, err := req.Post("/tasks/{id}/retry")
+	if err != nil {
+		return false, err
+	}
+	switch res.StatusCode() {
+	case 200, 204:
+		return true, nil
+	case 404:
+		return false, nil
+	default:
+		return false, fmt.Errorf("%d: %s", res.StatusCode(), res.String())
+	}
 }
 
-func (c *Client) DeleteTask(taskID string) error {
+func (c *Client) DeleteTask(taskID string) (bool, error) {
 	req := c.client.R().
 		SetContext(c.ctx).
 		SetPathParam("id", taskID)
-	_, err := req.Delete("/tasks/{id}")
-	return err
+	res, err := req.Delete("/tasks/{id}")
+	if err != nil {
+		return false, err
+	}
+	switch res.StatusCode() {
+	case 200, 204:
+		return true, nil
+	case 404:
+		return false, nil
+	default:
+		return false, fmt.Errorf("%d: %s", res.StatusCode(), res.String())
+	}
 }

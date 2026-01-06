@@ -1,6 +1,9 @@
 package cloudconvert
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 func (c *Client) VideoConvert(payload *VideoConvertPayload) (*ConvertTaskResponse, error) {
 
@@ -19,6 +22,8 @@ func (c *Client) VideoConvert(payload *VideoConvertPayload) (*ConvertTaskRespons
 	res, err := req.Post("/convert")
 	if err != nil {
 		return nil, err
+	} else if res.StatusCode() < 200 || res.StatusCode() >= 400 {
+		return nil, fmt.Errorf("video convert failed with status code %d: %s", res.StatusCode(), res.String())
 	}
 
 	var convertRes ConvertTaskResponse

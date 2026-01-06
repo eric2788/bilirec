@@ -25,7 +25,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:latest
 WORKDIR /app
 
-RUN apk update && apk add --no-cache ffmpeg
+RUN apk update && \
+    apk add --no-cache ffmpeg \
+    && rm -rf /var/cache/apk/*
 
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=build /app/bilirec .
@@ -40,6 +42,7 @@ ENV ANONYMOUS_LOGIN=false \
     MAX_RECORDING_HOURS=5 \
     MAX_RECOVERY_ATTEMPTS=5 \
     OUTPUT_DIR=records \
+    DATABASE_DIR=database \
     CONVERT_FLV_TO_MP4=false \
     DELETE_FLV_AFTER_CONVERT=false
 

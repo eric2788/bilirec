@@ -4,13 +4,19 @@ import (
 	"sync"
 )
 
-type BytesPool sync.Pool
+type BytesPool struct {
+	*sync.Pool
+	BufferSize int
+}
 
 func NewBytesPool(bufferSize int) *BytesPool {
 	return &BytesPool{
-		New: func() any {
-			buf := make([]byte, bufferSize)
-			return &buf
+		BufferSize: bufferSize,
+		Pool: &sync.Pool{
+			New: func() any {
+				buf := make([]byte, bufferSize)
+				return &buf
+			},
 		},
 	}
 }
@@ -24,10 +30,10 @@ func (p *BytesPool) PutBytes(buf []byte) {
 }
 
 func (p *BytesPool) GetBytesPtr() *[]byte {
-	return (*sync.Pool)(p).Get().(*[]byte)
+	return p.Pool.Get().(*[]byte)
 }
 
 func (p *BytesPool) PutBytesPtr(buf *[]byte) {
 	*buf = (*buf)[:cap(*buf)]
-	(*sync.Pool)(p).Put(buf)
+	p.Pool.Put(buf)
 }

@@ -8,8 +8,9 @@ import (
 )
 
 type Client struct {
-	client *resty.Client
-	ctx    context.Context
+	client       *resty.Client
+	uploadClient *resty.Client
+	ctx          context.Context
 
 	apiKey string
 }
@@ -24,11 +25,17 @@ func NewClient(ctx context.Context, apiKey string) *Client {
 		SetAuthScheme("Bearer").
 		SetAuthToken(apiKey)
 
+	uploadClient := resty.New().
+		SetTimeout(0).
+		SetHeader("Content-Type", "multipart/form-data").
+		SetRedirectPolicy(resty.NoRedirectPolicy()).
+		SetAuthScheme("Bearer").
+		SetAuthToken(apiKey)
+
 	return &Client{
-		client: client,
-		ctx:    ctx,
-		apiKey: apiKey,
+		client:       client,
+		uploadClient: uploadClient,
+		ctx:          ctx,
+		apiKey:       apiKey,
 	}
 }
-
-

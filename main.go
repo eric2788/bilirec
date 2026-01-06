@@ -10,6 +10,7 @@ import (
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/modules/config"
 	"github.com/eric2788/bilirec/internal/modules/rest"
+	"github.com/eric2788/bilirec/internal/services/convert"
 	f "github.com/eric2788/bilirec/internal/services/file"
 	"github.com/eric2788/bilirec/internal/services/recorder"
 	"github.com/eric2788/bilirec/internal/services/stream"
@@ -24,8 +25,9 @@ func main() {
 		bilibili.Module,
 		rest.Module,
 
-		fx.Provide(recorder.NewService),
+		fx.Provide(convert.NewService),
 		fx.Provide(stream.NewService),
+		fx.Provide(recorder.NewService),
 		fx.Provide(f.NewService),
 
 		fx.Invoke(room.NewController),

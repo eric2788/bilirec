@@ -68,7 +68,6 @@ func (c *Controller) listFiles(ctx fiber.Ctx) error {
 // @Accept json
 // @Produce octet-stream
 // @Param path path string true "File path"
-// @Param format query string false "Output format (e.g., flv)"
 // @Success 200 {file} binary "File stream"
 // @Failure 400 {string} string "Bad request"
 // @Failure 403 {string} string "Forbidden"
@@ -83,8 +82,7 @@ func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	if c.recorderSvc.IsRecording(path) {
 		return fiber.NewError(fiber.StatusBadRequest, "無法下載正在錄製的文件")
 	}
-	format := ctx.Query("format", "flv")
-	f, info, err := c.fileSvc.GetFileStream(path, format)
+	f, info, err := c.fileSvc.GetFileStream(path)
 	if err != nil {
 		logger.Warnf("error getting file stream at path %s: %v", path, err)
 		return c.parseFiberError(err)

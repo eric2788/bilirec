@@ -8,6 +8,7 @@ import (
 
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/modules/config"
+	"github.com/eric2788/bilirec/internal/services/convert"
 	"github.com/eric2788/bilirec/internal/services/recorder"
 	"github.com/eric2788/bilirec/internal/services/stream"
 	"go.uber.org/fx"
@@ -27,6 +28,7 @@ func TestRecorder_MemoryLeak_SingleSession(t *testing.T) {
 		config.Module,
 		bilibili.Module,
 		fx.Provide(stream.NewService),
+		fx.Provide(convert.NewService),
 		fx.Provide(recorder.NewService),
 		fx.Populate(&recorderService),
 	)
@@ -133,6 +135,7 @@ func TestRecorder_MemoryLeak_MultipleStartStop(t *testing.T) {
 		config.Module,
 		bilibili.Module,
 		fx.Provide(stream.NewService),
+		fx.Provide(convert.NewService),
 		fx.Provide(recorder.NewService),
 		fx.Populate(&recorderService),
 	)
@@ -223,6 +226,7 @@ func TestRecorder_MemoryLeak_ProcessedDataCleanup(t *testing.T) {
 		config.Module,
 		bilibili.Module,
 		fx.Provide(stream.NewService),
+		fx.Provide(convert.NewService),
 		fx.Provide(recorder.NewService),
 		fx.Populate(&recorderService),
 	)
@@ -291,6 +295,7 @@ func TestRecorder_MemoryLeak_ConcurrentRecordings(t *testing.T) {
 		config.Module,
 		bilibili.Module,
 		fx.Provide(stream.NewService),
+		fx.Provide(convert.NewService),
 		fx.Provide(recorder.NewService),
 		fx.Populate(&recorderService),
 	)
@@ -373,6 +378,7 @@ func TestRecorder_Goroutine_Leak(t *testing.T) {
 		config.Module,
 		bilibili.Module,
 		fx.Provide(stream.NewService),
+		fx.Provide(convert.NewService),
 		fx.Provide(recorder.NewService),
 		fx.Populate(&recorderService),
 	)

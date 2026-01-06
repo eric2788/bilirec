@@ -1,6 +1,11 @@
 package utils
 
-import "strconv"
+import (
+	"strconv"
+	"time"
+
+	"github.com/sirupsen/logrus"
+)
 
 func NilOrElse[T any](ptr *T, defaultValue T) T {
 	if ptr == nil {
@@ -42,4 +47,31 @@ func MustAtoi(s string) int {
 		panic(err)
 	}
 	return n
+}
+
+func MustAtoi64(s string) int64 {
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
+func WithRetry(attempts int, log *logrus.Entry, action string, fn func() error) error {
+	var err error
+	for i := range attempts {
+		err = fn()
+		if err == nil {
+			log.Debugf("%s succeeded on attempt %d", action, i+1)
+			return nil
+		} else {
+			log.Warnf("%s failed on attempt %d: %v", action, i+1, err)
+		}
+		if i < attempts-1 {
+			sleep := time.Duration(1<<i) * time.Second
+			log.Warnf("will retry after %.f seconds...", sleep.Seconds())
+			time.Sleep(sleep)
+		}
+	}
+	return err
 }
