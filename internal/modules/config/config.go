@@ -24,6 +24,8 @@ type Config struct {
 
 	ConvertFLVToMp4       bool
 	DeleteFlvAfterConvert bool
+	CloudConvertThreshold int64
+	CloudConvertApiKey    string
 
 	BackendHost  string
 	FrontendURL  *url.URL
@@ -79,6 +81,8 @@ func provider() (*Config, error) {
 		MaxRecoveryAttempts:     utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_RECOVERY_ATTEMPTS"), "5")),
 		OutputDir:               utils.EmptyOrElse(os.Getenv("OUTPUT_DIR"), "records"),
 		SecretDir:               utils.EmptyOrElse(os.Getenv("SECRET_DIR"), "secrets"),
+		CloudConvertThreshold:   utils.MustAtoi64(utils.EmptyOrElse(os.Getenv("CLOUDCONVERT_THRESHOLD"), "1073741824")), // 1 GB
+		CloudConvertApiKey:      os.Getenv("CLOUDCONVERT_API_KEY"),                                                      // empty to disable
 		ConvertFLVToMp4:         os.Getenv("CONVERT_FLV_TO_MP4") == "true",
 		DeleteFlvAfterConvert:   os.Getenv("DELETE_FLV_AFTER_CONVERT") == "true",
 		FrontendURL:             url,

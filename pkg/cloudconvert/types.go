@@ -19,13 +19,7 @@ type ConvertTaskResponse struct {
 }
 
 type ConvertTaskData struct {
-	ID             string                 `json:"id"`
-	Operation      string                 `json:"operation"`
-	Status         string                 `json:"status"`
-	Message        *string                `json:"message"`
-	CreatedAt      string                 `json:"created_at"`
-	StartedAt      string                 `json:"started_at"`
-	EndedAt        *string                `json:"ended_at"`
+	ImportExportBaseData
 	DependsOnTasks map[string]interface{} `json:"depends_on_tasks"`
 	Engine         string                 `json:"engine"`
 	EngineVersion  string                 `json:"engine_version"`
@@ -34,13 +28,13 @@ type ConvertTaskData struct {
 }
 
 type ImportExportBaseData struct {
-	ID        string  `json:"id"`
-	Operation string  `json:"operation"`
-	Status    string  `json:"status"`
-	Message   *string `json:"message"`
-	CreatedAt string  `json:"created_at"`
-	StartedAt string  `json:"started_at"`
-	EndedAt   string  `json:"ended_at"`
+	ID        string     `json:"id"`
+	Operation string     `json:"operation"`
+	Status    TaskStatus `json:"status"`
+	Message   *string    `json:"message"`
+	CreatedAt string     `json:"created_at"`
+	StartedAt string     `json:"started_at"`
+	EndedAt   string     `json:"ended_at"`
 }
 
 type ImportUploadRequest struct {
@@ -91,6 +85,15 @@ type ExportedFile struct {
 	URL      string `json:"url"`
 }
 
+type TaskStatus string
+
+const (
+	TaskStatusWaiting    TaskStatus = "waiting"
+	TaskStatusProcessing TaskStatus = "processing"
+	TaskStatusFinished   TaskStatus = "finished"
+	TaskStatusError      TaskStatus = "error"
+)
+
 type TaskResponse struct {
 	Data TaskData `json:"data"`
 }
@@ -105,7 +108,7 @@ type TaskData struct {
 	ID             string            `json:"id"`
 	JobID          string            `json:"job_id"`
 	Operation      string            `json:"operation"`
-	Status         string            `json:"status"`
+	Status         TaskStatus        `json:"status"`
 	Credits        *int              `json:"credits"`
 	Message        *string           `json:"message"`
 	Code           *string           `json:"code"`
