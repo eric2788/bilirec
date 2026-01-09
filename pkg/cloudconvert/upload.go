@@ -7,10 +7,12 @@ import (
 	"os"
 )
 
-func (c *Client) CreateUploadTask(payload *ImportUploadRequest) (*ImportUploadResponse, error) {
-	req := c.client.R().
-		SetContext(c.ctx).
-		SetBody(payload)
+func (c *Client) CreateUploadTask(redirect ...string) (*ImportUploadResponse, error) {
+	req := c.client.R().SetContext(c.ctx)
+
+	if len(redirect) > 0 {
+		req.SetBody(&ImportUploadRequest{Redirect: redirect[0]})
+	}
 
 	res, err := req.Post("/import/upload")
 	if err != nil {

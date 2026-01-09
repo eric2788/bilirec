@@ -15,16 +15,7 @@ type VideoConvertPayload struct {
 }
 
 type ConvertTaskResponse struct {
-	Data ConvertTaskData `json:"data"`
-}
-
-type ConvertTaskData struct {
-	ImportExportBaseData
-	DependsOnTasks map[string]interface{} `json:"depends_on_tasks"`
-	Engine         string                 `json:"engine"`
-	EngineVersion  string                 `json:"engine_version"`
-	Payload        map[string]interface{} `json:"payload"`
-	Result         interface{}            `json:"result"`
+	Data TaskData `json:"data"`
 }
 
 type ImportExportBaseData struct {
@@ -140,6 +131,7 @@ type TaskListMeta struct {
 type TaskPayload struct {
 	InputFormat   string `json:"input_format"`
 	OutputFormat  string `json:"output_format"`
+	Pages         string `json:"pages"`
 	PageRange     string `json:"page_range"`
 	OptimizePrint bool   `json:"optimize_print"`
 }
