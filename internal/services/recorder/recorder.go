@@ -100,7 +100,11 @@ func (r *Service) Start(roomId int) error {
 	}
 
 	if r.recording.Size() >= r.cfg.MaxConcurrentRecordings {
-		return ErrMaxConcurrentRecordingsReached
+		if existing, ok := r.recording.Load(roomId); !ok { // if not recovering existing recording
+			return ErrMaxConcurrentRecordingsReached
+		} else if status := existing.status.Load(); status != recoveringPtr { // not recovering
+			return ErrMaxConcurrentRecordingsReached
+		}
 	}
 
 	roomInfo, err := r.bilic.GetLiveRoomInfo(roomId)
