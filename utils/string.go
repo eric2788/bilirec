@@ -14,24 +14,6 @@ func PrettyPrintJSON(v interface{}) string {
 	return string(bytes)
 }
 
-// Helper to remove invalid filename characters
-func SanitizeFilename(name string) string {
-	// Replace invalid characters with underscore
-	replacer := strings.NewReplacer(
-		"/", "_",
-		"\\", "_",
-		":", "_",
-		"*", "_",
-		"?", "_",
-		"\"", "_",
-		"<", "_",
-		">", "_",
-		"|", "_",
-		".", "_",
-	)
-	return replacer.Replace(name)
-}
-
 func TruncateString(s string, maxLen int) string {
 	if maxLen <= 0 {
 		return ""

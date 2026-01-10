@@ -26,6 +26,7 @@ func (c *Client) CreateExportURL(payload *ExportURLRequest) (*ExportURLResponse,
 func (c *Client) DownloadAsFileStream(url string) (io.ReadCloser, error) {
 	req := c.client.R().
 		SetContext(c.ctx).
+		SetHeader("Content-Type", "application/octet-stream").
 		SetDoNotParseResponse(true)
 
 	res, err := req.Get(url)

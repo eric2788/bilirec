@@ -6,6 +6,8 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+type GetActiveRecordings func() int
+
 type ConvertManager interface {
 	StartWorker(ctx context.Context, db *bbolt.DB) error
 	Enqueue(inputPath, outputPath, format string) (*TaskQueue, error)
@@ -14,8 +16,9 @@ type ConvertManager interface {
 }
 
 type TaskQueue struct {
-	TaskID     string `json:"task_id"`
-	InputPath  string `json:"input_path"`
-	OutputPath string `json:"output_path"`
-	Format     string `json:"format"`
+	TaskID       string `json:"task_id"`
+	InputPath    string `json:"input_path"`
+	OutputPath   string `json:"output_path"`
+	InputFormat  string `json:"input_format"`
+	OutputFormat string `json:"output_format"`
 }
