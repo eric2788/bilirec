@@ -94,7 +94,7 @@ func (s *Service) Cancel(taskID string) error {
 }
 
 func (s *Service) ListInProgress() ([]*TaskQueue, error) {
-	var allQueues []*TaskQueue
+	allQueues := make([]*TaskQueue, 0)
 	for _, manager := range s.managers {
 		queues, err := manager.ListInProgress()
 		if err != nil {
