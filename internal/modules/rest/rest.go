@@ -96,6 +96,7 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 			limiter.New(limiter.Config{Max: 10, Expiration: 1 * time.Minute}),
 			loginHandler(cfg),
 		)
+		app.Post("/logout", logoutHandler(cfg))
 		app.Use(jwt.New(jwt.Config{
 			Extractor:  extractors.FromCookie(jwtTokenKey),
 			SigningKey: jwt.SigningKey{Key: []byte(cfg.JwtSecret)},

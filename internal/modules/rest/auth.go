@@ -71,6 +71,29 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 	}
 }
 
+// Logout
+// @Summary Logout and clear JWT cookie
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Success 200 {string} string "Logout successful"
+// @Router /logout [post]
+func logoutHandler(cfg *config.Config) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		c.Cookie(&fiber.Cookie{
+			Name:     jwtTokenKey,
+			Value:    "",
+			Path:     "/",
+			Domain:   utils.Ternary(cfg.ProductionMode, cfg.BackendHost, ""),
+			Expires:  time.Now().Add(-1 * time.Hour), // in the past
+			HTTPOnly: cfg.ProductionMode,
+			Secure:   cfg.ProductionMode,
+			SameSite: "None",
+		})
+		return c.SendStatus(fiber.StatusOK)
+	}
+}
+
 func compareUsernameAndPassword(cfg *config.Config, user, pass string) bool {
 	return subtle.ConstantTimeCompare([]byte(user), []byte(cfg.Username)) == 1 || bcrypt.CompareHashAndPassword([]byte(cfg.PasswordHash), []byte(pass)) == nil
 }
