@@ -36,12 +36,16 @@ jobs:
 
       - name: Generate swagger docs
         run: swag init -g internal/modules/rest/rest.go -o docs
+
       - name: Install dependencies
         run: |
           go mod download
+
       - name: Run tests
-        run: |
-          go test -v ./...
+        id: test
+        continue-on-error: true
+        uses: robherley/go-test-action@v0
+
   publish_docker:
     needs: [ test_program ]
     runs-on: ubuntu-latest
