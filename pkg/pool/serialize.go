@@ -1,38 +1,40 @@
 package pool
 
 import (
-	"bytes"
 	"encoding/gob"
 )
 
 type Serializer struct {
-	encBuf  *bytes.Buffer
-	decBuf  *bytes.Buffer
-	encoder *gob.Encoder
-	decoder *gob.Decoder
+	encPool *BufferPool
+	decPool *BufferPool
 }
 
 func NewSerializer() *Serializer {
-	encBuf := bytes.NewBuffer(make([]byte, 0, 1024))
-	decBuf := bytes.NewBuffer(make([]byte, 0, 1024))
 	return &Serializer{
-		encBuf:  encBuf,
-		decBuf:  decBuf,
-		encoder: gob.NewEncoder(encBuf),
-		decoder: gob.NewDecoder(decBuf),
+		encPool: NewBufferPool(1024, 64*1024),
+		decPool: NewBufferPool(1024, 64*1024),
 	}
 }
 
 func (s *Serializer) Serialize(v interface{}) ([]byte, error) {
-	s.encBuf.Reset()
-	if err := s.encoder.Encode(v); err != nil {
+	buf := s.encPool.Get()
+	buf.Reset()
+	enc := gob.NewEncoder(buf)
+	defer s.encPool.Put(buf)
+	if err := enc.Encode(v); err != nil {
 		return nil, err
 	}
-	return append([]byte(nil), s.encBuf.Bytes()...), nil
+	out := append([]byte(nil), buf.Bytes()...) // copy out
+	return out, nil
 }
 
 func (s *Serializer) Deserialize(data []byte, v any) error {
-	s.decBuf.Reset()
-	s.decBuf.Write(data)
-	return s.decoder.Decode(v)
+	buf := s.decPool.Get()
+	buf.Reset()
+	defer s.decPool.Put(buf)
+	if _, err := buf.Write(data); err != nil {
+		return err
+	}
+	dec := gob.NewDecoder(buf)
+	return dec.Decode(v)
 }
