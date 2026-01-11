@@ -19,6 +19,11 @@ func TestConvertToMp4(t *testing.T) {
 	var file *os.File
 	var err error
 
+	const inputPath = "original.flv"
+	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
+		t.Skipf("%s does not exist, skipping test", inputPath)
+	}
+
 	if os.Getenv("CI") != "" {
 		file, err = os.CreateTemp("", "output_video_*.mp4")
 	} else {
@@ -39,7 +44,7 @@ func TestConvertToMp4(t *testing.T) {
 		t.Fatalf("failed to open converter: %v", err)
 	}
 	defer converter.Close()
-	_, err = converter.Process(t.Context(), "original.flv")
+	_, err = converter.Process(t.Context(), inputPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			t.Skip("original.flv does not exist, skipping test")
