@@ -33,6 +33,9 @@ docker run -d \
   -e FRONTEND_URL=http://localhost:8080 \
   -v /path/to/records:/app/records \
   -v /path/to/secrets:/app/secrets \
+  -v /path/to/database:/app/database \
+  # 可选：启用 CloudConvert（替换为你的 API key）
+  -e CLOUDCONVERT_API_KEY=your_api_key \
   bilirec:latest
 ```
 
@@ -73,6 +76,9 @@ go build -o bilirec main.go
 | `JWT_SECRET` | JWT 签名密钥 | `bilirec_secret` |
 | `DEBUG` | 启用调试模式（会开启 pprof 和临时 hex token） | `false` |
 | `PRODUCTION_MODE` | 启用生产模式（影响 cookie 与 CORS） | `false` |
+| `DATABASE_DIR` | 本地数据库目录（bbolt，用于持久化转换任务等） | `database` |
+| `CLOUDCONVERT_THRESHOLD` | 使用 CloudConvert 的文件大小阈值（字节） | `1073741824` (1 GB) |
+| `CLOUDCONVERT_API_KEY` | 可选：CloudConvert API Key（为空则禁用 CloudConvert） | (未设置) |
 
 ### 示例配置
 
@@ -84,8 +90,12 @@ export MAX_RECORDING_HOURS=10
 export MAX_RECOVERY_ATTEMPTS=5
 export OUTPUT_DIR=/path/to/records
 export SECRET_DIR=/path/to/secrets
+export DATABASE_DIR=/path/to/database
 export CONVERT_FLV_TO_MP4=false
 export DELETE_FLV_AFTER_CONVERT=false
+# 可选：CloudConvert（如果启用会对大文件使用云端转换）
+export CLOUDCONVERT_THRESHOLD=1073741824
+export CLOUDCONVERT_API_KEY=
 export BACKEND_HOST=localhost:8080
 export FRONTEND_URL=http://localhost:8080
 export JWT_SECRET=bilirec_secret
@@ -171,7 +181,9 @@ Content-Type: application/json
   ```
   GET /files/download/*
   ```
-  可选查询参数：`?format=mp4`（或其他支持的格式）用于在流式传输时转换文件格式。
+  下载接口直接返回存储的文件，**不再支持**通过查询参数进行即时格式转换（此前的 `?format=...` 参数已移除）。
+  若要将录制的 FLV 转为 MP4，请启用 `CONVERT_FLV_TO_MP4`：在录制完成时，recorder 会将 FLV 文件加入转换队列，由后台任务异步转换为 MP4（转换行为受 `DELETE_FLV_AFTER_CONVERT` 控制）。
+  当同时设置了 `CLOUDCONVERT_API_KEY` 且文件大小 >= `CLOUDCONVERT_THRESHOLD`（默认 1 GB）时，系统会优先使用 CloudConvert（异步任务，可通过 `/convert/tasks` 查询转换状态）；否则由本地 ffmpeg 后台任务处理。
 
 - **删除多个文件**
   ```
@@ -187,6 +199,19 @@ Content-Type: application/json
   ```
   DELETE /files/{path}
   ```
+
+#### 转换任务
+
+- **列出进行中的转换任务**（需要认证，返回任务信息）
+  ```
+  GET /convert/tasks
+  ```
+
+- **取消转换任务**（需要认证）
+  ```
+  DELETE /convert/tasks/:task_id
+  ```
+  返回 `204 No Content` 表示取消成功，若任务不存在返回 `404`。
 
 #### 房间信息
 
@@ -206,6 +231,7 @@ Content-Type: application/json
 ├── Dockerfile                        # Docker 镜像构建文件
 ├── internal/
 │   ├── controllers/                  # HTTP 控制器
+│   │   ├── convert/                  # 转换任务管理（/convert）
 │   │   ├── file/                     # 文件管理
 │   │   ├── record/                   # 录制管理
 │   │   └── room/                     # 房间信息
@@ -214,14 +240,17 @@ Content-Type: application/json
 │   │   ├── config/                   # 配置管理
 │   │   └── rest/                     # REST 服务（包含 Swagger / pprof）
 │   └── services/                     # 业务逻辑
+│       ├── convert/                  # 转换服务（本地 ffmpeg 或 CloudConvert）
 │       ├── file/                     # 文件服务
 │       ├── recorder/                 # 录制服务
 │       └── stream/                   # 流处理服务
 ├── pkg/                              # 底层库与工具
-│   ├── ds/
-│   ├── flv/
-│   ├── pipeline/
-│   └── pool/
+│   ├── cloudconvert/                 # CloudConvert client wrapper (optional)
+│   ├── ds/                           # 数据结构（如 FLV Tag）
+│   ├── flv/                          # FLV 读写与处理
+│   ├── pipeline/                     # 流处理管道  
+|   ├── monitor/                      # 监控与指标
+│   └── pool/                         # 内存池
 ├── utils/                            # 工具函数
 ├── LICENSE
 └── README.md
@@ -234,7 +263,7 @@ Content-Type: application/json
 1. 通过 [`bilibili.Client`](internal/modules/bilibili/bilibili.go) 获取直播流地址
 2. 使用 [`stream.Service`](internal/services/stream/stream.go) 读取流数据
 3. [`recorder.Service`](internal/services/recorder/recorder.go) 管理录制任务（自动重连与恢复）
-4. 数据写入到 FLV 文件，保存在配置的输出目录；可在下载时选择将 FLV 转换为 MP4（受 `CONVERT_FLV_TO_MP4` 控制）
+4. 数据写入到 FLV 文件，保存在配置的输出目录；如果启用了 `CONVERT_FLV_TO_MP4`，录制完成时会自动将 FLV 文件加入转换队列并由后台任务异步转换为 MP4（转换行为受 `DELETE_FLV_AFTER_CONVERT` 控制，转换任务可通过 `/convert/tasks` 查询）。
 
 ### 关键特性
 
@@ -243,7 +272,7 @@ Content-Type: application/json
 - **定期刷盘**: 每 5 秒自动刷新写入缓冲，防止数据丢失
 - **低资源占用**: 设计注重低内存和低 CPU 使用，适合树莓派等资源受限设备
 - **文件管理**: 支持列出、预览、下载（可转换格式）、批量删除文件及删除目录，详见 `internal/controllers/file/file.go`
-- **下载转换**: 如果启用 `CONVERT_FLV_TO_MP4`，下载时会将 FLV 转为 MP4；可通过 `DELETE_FLV_AFTER_CONVERT` 控制是否删除原始 FLV
+- **自动转换**: 如果启用 `CONVERT_FLV_TO_MP4`，录制完成时会自动将 FLV 转为 MP4；可通过 `DELETE_FLV_AFTER_CONVERT` 控制是否删除原始 FLV
 - **实时修复（Realtime Fixer）**: 在流式写入场景下逐个修复 FLV Tag 的时间戳并输出，包含重复 Tag 去重（可查询去重统计），并通过内存池、去重缓存与周期清理来保持低延迟与低内存占用，适合边录制边推送或实时下载的场景。
 - **REST API 文档**: Swagger UI 在根路径 `/` 提供（由 `swag` 生成，参见 `internal/modules/rest`）
 - **认证与调试**: 可选用户名/密码登录（设置 `USERNAME` 和 `PASSWORD`）启用 JWT 认证；调试模式下可通过 `/debug/pprof` 访问 pprof（受临时 token 或基本 auth 保护）
