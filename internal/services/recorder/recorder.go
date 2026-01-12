@@ -215,7 +215,7 @@ func (r *Service) rev(roomId int, ch <-chan []byte, info *Recorder, pipe *pipeli
 		info.bytesRead.Add(uint64(len(data)))
 		result, err := pipe.Process(r.ctx, data)
 		r.st.Flush(data)
-		_ = result
+		r.st.Flush(result)
 
 		if err != nil {
 			l.Errorf("error writing data to file: %v", err)

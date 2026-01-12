@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/eric2788/bilirec/pkg/pool"
 	"github.com/go-resty/resty/v2"
@@ -26,7 +27,9 @@ func (r *Service) ReadStream(resp *resty.Response, ctx context.Context) (<-chan 
 }
 
 func (r *Service) Flush(buf []byte) {
-	r.pool.PutBytes(buf)
+	if cap(buf) == r.pool.BufferSize {
+		r.pool.PutBytes(buf)
+	}
 }
 
 func (r *Service) read(ch chan<- []byte, stream io.ReadCloser, ctx context.Context) {
@@ -57,6 +60,12 @@ func (r *Service) read(ch chan<- []byte, stream io.ReadCloser, ctx context.Conte
 				}
 			} else {
 				r.Flush(buf)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(1 * time.Millisecond):
+					continue
+				}
 			}
 		}
 	}

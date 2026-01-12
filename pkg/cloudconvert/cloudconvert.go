@@ -4,15 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/eric2788/bilirec/pkg/pool"
 	"github.com/go-resty/resty/v2"
 )
 
 type Client struct {
-	client       *resty.Client
-	uploadClient *resty.Client
-	ctx          context.Context
+	client *resty.Client
+	ctx    context.Context
 
-	apiKey string
+	uploadPool *pool.BytesPool
 }
 
 func NewClient(ctx context.Context, apiKey string) *Client {
@@ -25,17 +25,9 @@ func NewClient(ctx context.Context, apiKey string) *Client {
 		SetAuthScheme("Bearer").
 		SetAuthToken(apiKey)
 
-	uploadClient := resty.New().
-		SetTimeout(0).
-		SetHeader("Content-Type", "multipart/form-data").
-		SetRedirectPolicy(resty.NoRedirectPolicy()).
-		SetAuthScheme("Bearer").
-		SetAuthToken(apiKey)
-
 	return &Client{
-		client:       client,
-		uploadClient: uploadClient,
-		ctx:          ctx,
-		apiKey:       apiKey,
+		client:     client,
+		ctx:        ctx,
+		uploadPool: pool.NewBytesPool(1 * 1024 * 1024), // 1MB
 	}
 }

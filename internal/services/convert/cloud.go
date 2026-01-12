@@ -18,7 +18,7 @@ import (
 )
 
 const cloudConvertBucket = "Queue_CloudConvert"
-const bufferSize = 5 * 1024 * 1024 // 5MB
+const bufferSize = 1 * 1024 * 1024 // 1MB
 
 var ErrCloudConvertNotConfigured = errors.New("cloudconvert client is not initialized")
 

@@ -30,9 +30,11 @@ func (c *Client) CreateExportURL(payload *ExportURLRequest) (*TaskResponse, erro
 func (c *Client) DownloadAsFileStream(url string) (io.ReadCloser, error) {
 	res, err := http.Get(url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("download request failed: %w", err)
 	} else if res.StatusCode < 200 || res.StatusCode >= 400 {
-		return nil, fmt.Errorf("video convert failed with status code %d", res.StatusCode)
+		res.Body.Close()
+		return nil, fmt.Errorf("download failed with status code %d", res.StatusCode)
 	}
+
 	return res.Body, nil
 }

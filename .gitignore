@@ -3,6 +3,8 @@
 **/database/*
 **/docs/*
 
+*.tmp
+*.zip
 *.mp4
 *.flv
 *.ts
