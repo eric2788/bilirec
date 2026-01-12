@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/eric2788/bilirec/pkg/cloudconvert"
-	"github.com/eric2788/bilirec/pkg/monitor"
 	"github.com/eric2788/bilirec/pkg/pool"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/sirupsen/logrus"
@@ -557,11 +556,7 @@ func TestMemoryUsage_Download(t *testing.T) {
 	defer outFile.Close()
 
 	t.Logf("downloading to file: %v", outputPath)
-	monitorReader := monitor.NewProgressReader(stream, func(read int64) {
-		t.Logf("downloaded %.2f MB", float64(read)/1024/1024)
-	})
-
-	totalWritten, err := outFile.ReadFrom(monitorReader)
+	totalWritten, err := outFile.ReadFrom(stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -695,13 +690,10 @@ func TestMemoryUsage_DownloadWithStreamToFile(t *testing.T) {
 	defer cleanupTestFile(t, outputPath)
 
 	t.Logf("downloading to file: %v", outputPath)
-	monitorReader := monitor.NewProgressReader(stream, func(read int64) {
-		t.Logf("downloaded %.2f MB", float64(read)/1024/1024)
-	})
 
-	downloadPool := pool.NewBytesPool(128 * 1024) // 128KB buffer pool
+	downloadPool := pool.NewBytesPool(5 * 1024 * 1024) // 5MB buffer pool
 
-	if err := utils.StreamToFile(t.Context(), monitorReader, outputPath, downloadPool); err != nil {
+	if err := utils.StreamToFile(t.Context(), stream, outputPath, downloadPool); err != nil {
 		t.Fatalf("StreamToFile failed: %v", err)
 	}
 

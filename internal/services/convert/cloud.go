@@ -17,7 +17,7 @@ import (
 )
 
 const cloudConvertBucket = "Queue_CloudConvert"
-const bufferSize = 1 * 1024 * 1024 // 1MB
+const downloadBufferSize = 5 * 1024 * 1024 // 5MB
 
 type cloudConvertManager struct {
 	db         *bbolt.DB
@@ -37,7 +37,7 @@ func newCloudConvertManager(client *cloudconvert.Client) ConvertManager {
 		serializer: pool.NewSerializer(),
 
 		downloading:  ds.NewSyncedSet[string](),
-		downloadPool: pool.NewBytesPool(bufferSize),
+		downloadPool: pool.NewBytesPool(downloadBufferSize),
 		concurrent:   semaphore.NewWeighted(2),
 	}
 }

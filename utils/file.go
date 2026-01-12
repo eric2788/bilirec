@@ -61,7 +61,7 @@ func StreamToFile(ctx context.Context, rc io.ReadCloser, outPath string, bp *poo
 	}
 
 	// buffered writer to reduce syscalls
-	writer := bufio.NewWriterSize(tmp, 256*1024) // 256KB write buffer
+	writer := bufio.NewWriterSize(tmp, 1024*1024) // 1MB write buffer
 
 	// get pooled buffer
 	buf := bp.GetBytes()

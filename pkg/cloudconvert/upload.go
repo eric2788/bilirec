@@ -7,10 +7,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-
-	"github.com/eric2788/bilirec/pkg/monitor"
-	"github.com/eric2788/bilirec/utils"
-	"github.com/sirupsen/logrus"
 )
 
 func (c *Client) CreateUploadTask(redirect ...string) (*ImportUploadResponse, error) {
@@ -44,24 +40,6 @@ func (c *Client) UploadFileToTask(f *os.File, task *ImportUploadTask) error {
 		return err
 	}
 
-	reader := utils.TernaryFunc(os.Getenv("DEBUG") == "true",
-		func() io.ReadCloser {
-			var lastLogged int64
-			return monitor.NewProgressReader(f, func(read int64) {
-				if read-lastLogged >= 100*1024*1024 { // 100MB threshold
-					logrus.
-						WithField("task", task.ID).
-						WithField("file", f.Name()).
-						Debugf("uploaded %.2f MB", float64(read)/1024/1024)
-					lastLogged = read
-				}
-			})
-		},
-		func() io.ReadCloser {
-			return f
-		},
-	)
-
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 
@@ -87,7 +65,7 @@ func (c *Client) UploadFileToTask(f *os.File, task *ImportUploadTask) error {
 		buf := c.uploadPool.GetBytes()
 		defer c.uploadPool.PutBytes(buf)
 
-		if _, err := io.CopyBuffer(part, reader, buf); err != nil {
+		if _, err := io.CopyBuffer(part, f, buf); err != nil {
 			pw.CloseWithError(err)
 			return
 		}
@@ -101,7 +79,7 @@ func (c *Client) UploadFileToTask(f *os.File, task *ImportUploadTask) error {
 
 	httpReq.Header.Set("Content-Type", mw.FormDataContentType())
 
-	res, err := http.DefaultClient.Do(httpReq)
+	res, err := c.streamClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("upload request failed: %w", err)
 	}

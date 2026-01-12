@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 )
 
 func (c *Client) CreateExportURL(payload *ExportURLRequest) (*TaskResponse, error) {
@@ -28,7 +27,7 @@ func (c *Client) CreateExportURL(payload *ExportURLRequest) (*TaskResponse, erro
 }
 
 func (c *Client) DownloadAsFileStream(url string) (io.ReadCloser, error) {
-	res, err := http.Get(url)
+	res, err := c.streamClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("download request failed: %w", err)
 	} else if res.StatusCode < 200 || res.StatusCode >= 400 {

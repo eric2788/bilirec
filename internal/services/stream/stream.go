@@ -63,8 +63,8 @@ func (r *Service) read(ch chan<- []byte, stream io.ReadCloser, ctx context.Conte
 				select {
 				case <-ctx.Done():
 					return
-				case <-time.After(1 * time.Millisecond):
-					continue
+				default:
+					time.Sleep(1 * time.Millisecond)
 				}
 			}
 		}
