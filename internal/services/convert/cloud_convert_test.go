@@ -96,7 +96,7 @@ func TestCancelUnExistingCloudConvertTask(t *testing.T) {
 	}
 	err = svc.Cancel(uuid)
 	if err == nil {
-		
+
 	}
 }
 

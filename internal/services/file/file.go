@@ -10,20 +10,19 @@ import (
 	"strings"
 
 	"github.com/eric2788/bilirec/internal/modules/config"
-	"github.com/sirupsen/logrus"
+	"github.com/eric2788/bilirec/internal/services/path"
 	"go.uber.org/fx"
 )
 
-var logger = logrus.WithField("service", "file")
+// var logger = logrus.WithField("service", "file")
 
-var ErrFileNotFound = fmt.Errorf("file not found")
-var ErrInvalidFilePath = fmt.Errorf("invalid file path")
-var ErrAccessDenied = fmt.Errorf("access denied")
 var ErrIsDirectory = fmt.Errorf("path is a directory")
 
 type Service struct {
 	cfg *config.Config
 	ctx context.Context
+
+	path *path.Service
 }
 
 type Tree struct {
@@ -34,12 +33,13 @@ type Tree struct {
 	IsRecording bool   `json:"is_recording,omitempty"`
 }
 
-func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
+func NewService(ls fx.Lifecycle, cfg *config.Config, pathSvc *path.Service) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &Service{
-		cfg: cfg,
-		ctx: ctx,
+		cfg:  cfg,
+		ctx:  ctx,
+		path: pathSvc,
 	}
 
 	ls.Append(fx.StopHook(cancel))
@@ -53,7 +53,7 @@ func (s *Service) ListTree(path string) ([]Tree, error) {
 }
 
 func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool) ([]Tree, error) {
-	fullPath, err := s.validatePath(path)
+	fullPath, err := s.path.ValidatePath(path)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool)
 		return nil, err
 	}
 
-	relativePath, err := s.getRelativePath(fullPath)
+	relativePath, err := s.path.GetRelativePath(fullPath)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (s *Service) ListTreeWithFilter(path string, filter func(fs.DirEntry) bool)
 }
 
 func (s *Service) GetFileStream(path string) (io.ReadCloser, os.FileInfo, error) {
-	fullPath, err := s.validatePath(path)
+	fullPath, err := s.path.ValidatePath(path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -110,7 +110,7 @@ func (s *Service) GetFileStream(path string) (io.ReadCloser, os.FileInfo, error)
 }
 
 func (s *Service) DeleteDirectory(path string) error {
-	fullPath, err := s.validatePath(path)
+	fullPath, err := s.path.ValidatePath(path)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (s *Service) DeleteDirectory(path string) error {
 func (s *Service) DeleteFiles(paths ...string) error {
 	var fullPaths []string
 	for _, path := range paths {
-		fullPath, err := s.validatePath(path)
+		fullPath, err := s.path.ValidatePath(path)
 		if err != nil {
 			return err
 		}
@@ -132,45 +132,4 @@ func (s *Service) DeleteFiles(paths ...string) error {
 		}
 	}
 	return nil
-}
-
-func (s *Service) validatePath(path string) (string, error) {
-	baseAbs, err := filepath.Abs(s.cfg.OutputDir)
-	if err != nil {
-		logger.Errorf("invalid base path for %s: %v", s.cfg.OutputDir, err)
-		return "", ErrInvalidFilePath
-	}
-
-	fullPath := filepath.Join(baseAbs, path)
-	fullPath = filepath.Clean(fullPath)
-
-	fullPathAbs, err := filepath.Abs(fullPath)
-	if err != nil {
-		logger.Errorf("invalid path for %s: %v", fullPath, err)
-		return "", ErrInvalidFilePath
-	}
-
-	if !strings.HasPrefix(fullPathAbs, baseAbs+string(os.PathSeparator)) &&
-		fullPathAbs != baseAbs {
-		logger.Errorf("path traversal detected: %s", fullPath)
-		return "", ErrAccessDenied
-	}
-
-	return fullPathAbs, nil
-}
-
-func (s *Service) getRelativePath(fullPath string) (string, error) {
-	baseAbs, err := filepath.Abs(s.cfg.OutputDir)
-	if err != nil {
-		return "", err
-	}
-
-	rel, err := filepath.Rel(baseAbs, fullPath)
-	if err != nil {
-		return "", err
-	}
-	if rel == "." {
-		rel = ""
-	}
-	return rel, nil
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/eric2788/bilirec/internal/modules/config"
 	"github.com/eric2788/bilirec/internal/services/file"
+	"github.com/eric2788/bilirec/internal/services/path"
 	"github.com/eric2788/bilirec/utils"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxtest"
@@ -24,6 +25,7 @@ func TestListTree(t *testing.T) {
 
 	app := fxtest.New(t,
 		config.Module,
+		fx.Provide(path.NewService),
 		fx.Provide(file.NewService),
 		fx.Populate(&fileService),
 		fx.Populate(&cfg),
@@ -108,6 +110,7 @@ func TestValidatePath(t *testing.T) {
 
 	app := fxtest.New(t,
 		config.Module,
+		fx.Provide(path.NewService),
 		fx.Provide(file.NewService),
 		fx.Populate(&fileService),
 	)
@@ -140,6 +143,7 @@ func TestDownloadStream(t *testing.T) {
 
 	app := fxtest.New(t,
 		config.Module,
+		fx.Provide(path.NewService),
 		fx.Provide(file.NewService),
 		fx.Populate(&fileService),
 	)
@@ -183,6 +187,7 @@ func TestDeleteFiles(t *testing.T) {
 
 	app := fxtest.New(t,
 		config.Module,
+		fx.Provide(path.NewService),
 		fx.Provide(file.NewService),
 		fx.Populate(&fileService),
 	)
@@ -287,6 +292,7 @@ func TestDeleteDirectory(t *testing.T) {
 
 	app := fxtest.New(t,
 		config.Module,
+		fx.Provide(path.NewService),
 		fx.Provide(file.NewService),
 		fx.Populate(&fileService),
 	)

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/eric2788/bilirec/internal/services/file"
+	"github.com/eric2788/bilirec/internal/services/path"
 	"github.com/eric2788/bilirec/internal/services/recorder"
 	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
@@ -17,12 +18,19 @@ var logger = logrus.WithField("controller", "file")
 type Controller struct {
 	fileSvc     *file.Service
 	recorderSvc *recorder.Service
+	pathSvc     *path.Service
 }
 
-func NewController(app *fiber.App, fileSvc *file.Service, recorderSvc *recorder.Service) *Controller {
+func NewController(
+	app *fiber.App,
+	fileSvc *file.Service,
+	recorderSvc *recorder.Service,
+	pathSvc *path.Service,
+) *Controller {
 	fc := &Controller{
 		fileSvc:     fileSvc,
 		recorderSvc: recorderSvc,
+		pathSvc:     pathSvc,
 	}
 	files := app.Group("/files")
 
@@ -150,9 +158,9 @@ func (c *Controller) parseFiberError(err error) error {
 	switch {
 	case os.IsNotExist(err):
 		return fiber.NewError(fiber.StatusNotFound, "找不到所屬文件夾或檔案")
-	case os.IsPermission(err), err == file.ErrAccessDenied:
+	case os.IsPermission(err), err == path.ErrAccessDenied:
 		return fiber.NewError(fiber.StatusForbidden, "無法存取該文件路徑")
-	case err == file.ErrInvalidFilePath:
+	case err == path.ErrInvalidFilePath:
 		return fiber.NewError(fiber.StatusBadRequest, "無效文件路徑")
 	case err == file.ErrIsDirectory:
 		return fiber.NewError(fiber.StatusBadRequest, "此路徑為文件夾")

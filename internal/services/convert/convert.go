@@ -102,7 +102,7 @@ func (s *Service) Cancel(taskID string) error {
 			return err
 		}
 	}
-	return fmt.Errorf("task %s not found in any convert manager", taskID)
+	return ErrTaskNotFound
 }
 
 func (s *Service) ListInProgress() ([]*TaskQueue, error) {

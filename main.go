@@ -13,6 +13,7 @@ import (
 	"github.com/eric2788/bilirec/internal/modules/rest"
 	c "github.com/eric2788/bilirec/internal/services/convert"
 	f "github.com/eric2788/bilirec/internal/services/file"
+	"github.com/eric2788/bilirec/internal/services/path"
 	"github.com/eric2788/bilirec/internal/services/recorder"
 	"github.com/eric2788/bilirec/internal/services/stream"
 	"github.com/eric2788/bilirec/utils"
@@ -26,6 +27,7 @@ func main() {
 		bilibili.Module,
 		rest.Module,
 
+		fx.Provide(path.NewService),
 		fx.Provide(c.NewService),
 		fx.Provide(stream.NewService),
 		fx.Provide(recorder.NewService),
