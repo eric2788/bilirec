@@ -102,7 +102,6 @@ func (f *ffmpegConvertManager) runTaskPeriodically(ctx context.Context) {
 				f.logger.Debugf("active recordings detected (%d), skipping ffmpeg tasks", actives)
 				continue
 			}
-			f.logger.Debug("checking ffmpeg task queue")
 			var queue *TaskQueue
 			if err := f.read(func(bucket *bbolt.Bucket) error {
 				k, v := bucket.Cursor().First()
@@ -118,7 +117,6 @@ func (f *ffmpegConvertManager) runTaskPeriodically(ctx context.Context) {
 				f.logger.Errorf("reading ffmpeg queue task failed: %v", err)
 				continue
 			} else if queue == nil {
-				f.logger.Debug("no ffmpeg tasks in queue")
 				continue
 			}
 
