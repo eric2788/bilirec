@@ -36,7 +36,6 @@ import (
 	"github.com/gofiber/contrib/v3/swagger"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/extractors"
-	"github.com/gofiber/fiber/v3/middleware/basicauth"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/limiter"
 	logging "github.com/gofiber/fiber/v3/middleware/logger"
@@ -55,15 +54,14 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 
 	if cfg.Debug {
 		hexStr := utils.RandomHexStringMust(32)
-		logger.Infof("you can use hex token (%s) or username/password to login /debug/pprof", hexStr)
-		app.Use("/debug/pprof", basicauth.New(basicauth.Config{
-			Authorizer: func(s1, s2 string, c fiber.Ctx) bool {
-				if c.Get("Authorization") == hexStr {
-					return true
-				}
-				return compareUsernameAndPassword(cfg, s1, s2)
-			},
-		}), pprof.New())
+		logger.Infof("you can use hex token %q to login /debug/pprof", hexStr)
+		authenticate := func(c fiber.Ctx) error {
+			if c.Get("Authorization") != hexStr {
+				return fiber.ErrUnauthorized
+			}
+			return c.Next()
+		}
+		app.Use("/debug/pprof", authenticate, pprof.New())
 	}
 
 	app.Use(logging.New(logging.Config{
