@@ -53,7 +53,11 @@ func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
 				return err
 			}
 			// use bbolt for offline storage
-			db, err := bbolt.Open(cfg.DatabaseDir+string(os.PathSeparator)+"queues.db", 0600, nil)
+			db, err := bbolt.Open(cfg.DatabaseDir+string(os.PathSeparator)+"queues.db", 0600, &bbolt.Options{
+				PageSize:     16 * 1024,
+				NoGrowSync:   true,
+				FreelistType: bbolt.FreelistArrayType,
+			})
 			if err != nil {
 				return err
 			}

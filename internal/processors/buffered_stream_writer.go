@@ -39,7 +39,7 @@ func (w *BufferedStreamWriterProcessor) Open(ctx context.Context, log *logrus.En
 		return err
 	}
 	w.file = file
-	w.writer = bufio.NewWriterSize(file, 16*1024*1024)
+	w.writer = bufio.NewWriterSize(file, 1*1024*1024)
 	w.logger = log.WithField("file", file.Name())
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 	w.wait.Add(2)
