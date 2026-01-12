@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -111,4 +112,11 @@ func StreamToFile(ctx context.Context, rc io.ReadCloser, outPath string, bp *poo
 func IsFileExists(path string) bool {
 	fi, err := os.Stat(path)
 	return err == nil && fi.Size() > 0
+}
+
+func FFmpegAvailable() bool {
+	if err := exec.Command("ffmpeg", "-h").Run(); err != nil {
+		return false
+	}
+	return true
 }

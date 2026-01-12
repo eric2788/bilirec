@@ -2,17 +2,17 @@ package processors_test
 
 import (
 	"os"
-	"os/exec"
 	"testing"
 
 	"github.com/eric2788/bilirec/internal/processors"
 	"github.com/eric2788/bilirec/pkg/pipeline"
+	"github.com/eric2788/bilirec/utils"
 )
 
 func TestConvertToMp4(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
-	} else if !ffmpegAvailable() {
+	} else if !utils.FFmpegAvailable() {
 		t.Skip("ffmpeg not available, skipping test")
 	}
 
@@ -53,12 +53,4 @@ func TestConvertToMp4(t *testing.T) {
 	}
 
 	t.Logf("converted file saved at %s", file.Name())
-}
-
-func ffmpegAvailable() bool {
-	cmd := exec.Command("ffmpeg", "-h")
-	if err := cmd.Run(); err != nil {
-		return false
-	}
-	return true
 }

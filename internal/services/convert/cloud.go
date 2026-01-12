@@ -2,7 +2,6 @@ package convert
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,8 +18,6 @@ import (
 
 const cloudConvertBucket = "Queue_CloudConvert"
 const bufferSize = 1 * 1024 * 1024 // 1MB
-
-var ErrCloudConvertNotConfigured = errors.New("cloudconvert client is not initialized")
 
 type cloudConvertManager struct {
 	db         *bbolt.DB

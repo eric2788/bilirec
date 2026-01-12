@@ -2,6 +2,7 @@ package convert
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -15,7 +16,12 @@ import (
 
 var logger = logrus.WithField("service", "convert")
 
-var ErrTaskNotFound = fmt.Errorf("convert task not found")
+var (
+	ErrTaskNotFound              = errors.New("convert task not found")
+	ErrNoConvertManager          = errors.New("no convert manager available")
+	ErrFFmpegNotInstalled        = errors.New("ffmpeg is not installed or not found in PATH")
+	ErrCloudConvertNotConfigured = errors.New("cloudconvert client is not initialized")
+)
 
 type Service struct {
 	cloudthreshold int64
@@ -68,6 +74,9 @@ func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
 }
 
 func (s *Service) Enqueue(path, format string, deleteSource bool) (*TaskQueue, error) {
+	if err := s.checkAvailableManagers(); err != nil {
+		return nil, err
+	}
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -83,6 +92,9 @@ func (s *Service) Enqueue(path, format string, deleteSource bool) (*TaskQueue, e
 }
 
 func (s *Service) Cancel(taskID string) error {
+	if err := s.checkAvailableManagers(); err != nil {
+		return err
+	}
 	for _, manager := range s.managers {
 		if err := manager.Cancel(taskID); err == nil {
 			return nil
@@ -94,6 +106,9 @@ func (s *Service) Cancel(taskID string) error {
 }
 
 func (s *Service) ListInProgress() ([]*TaskQueue, error) {
+	if err := s.checkAvailableManagers(); err != nil {
+		return nil, err
+	}
 	allQueues := make([]*TaskQueue, 0)
 	for _, manager := range s.managers {
 		queues, err := manager.ListInProgress()
@@ -108,11 +123,21 @@ func (s *Service) ListInProgress() ([]*TaskQueue, error) {
 func (s *Service) SetActiveRecordingsGetter(getter GetActiveRecordings) {
 	if _, ok := s.managers["ffmpeg"]; ok {
 		return
+	} else if utils.FFmpegAvailable() {
+		s.managers["ffmpeg"] = newFFmpegConvertManager(getter)
+	} else {
+		logger.Warn("ffmpeg not available, ffmpeg convert manager not initialized")
 	}
-	s.managers["ffmpeg"] = newFFmpegConvertManager(getter)
 }
 
 func (s *Service) shoulduseCloudConvert(fileSize int64) bool {
 	_, cloudEnabled := s.managers["cloudconvert"]
 	return cloudEnabled && s.cloudthreshold >= 0 && fileSize >= s.cloudthreshold
+}
+
+func (s *Service) checkAvailableManagers() error {
+	if len(s.managers) == 0 {
+		return fmt.Errorf("no convert manager available")
+	}
+	return nil
 }

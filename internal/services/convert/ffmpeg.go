@@ -31,8 +31,8 @@ func newFFmpegConvertManager(getActives GetActiveRecordings) ConvertManager {
 }
 
 func (f *ffmpegConvertManager) StartWorker(ctx context.Context, db *bbolt.DB) error {
-	if err := exec.CommandContext(ctx, "ffmpeg", "-h").Run(); err != nil {
-		return err
+	if !utils.FFmpegAvailable() {
+		return ErrCloudConvertNotConfigured
 	} else if err := db.Update(func(tx *bbolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(ffmpegBucket))
 		return err
