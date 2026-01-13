@@ -93,17 +93,15 @@ func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	if c.recorderSvc.IsRecording(path) {
 		return fiber.NewError(fiber.StatusBadRequest, "無法下載正在錄製的文件")
 	}
-	f, info, err := c.fileSvc.GetFileStream(path)
+	fullPath, err := c.pathSvc.ValidatePath(path)
 	if err != nil {
-		logger.Warnf("error getting file stream at path %s: %v", path, err)
+		logger.Warnf("error validating path %s: %v", path, err)
 		return c.parseFiberError(err)
 	}
-
-	ctx.Set(fiber.HeaderContentDisposition, "attachment; filename*=UTF-8''"+url.PathEscape(info.Name()))
-	ctx.Set(fiber.HeaderContentType, "application/octet-stream")
-	ctx.Set(fiber.HeaderContentLength, strconv.FormatInt(info.Size(), 10))
-
-	return ctx.SendStream(f)
+	ctx.Attachment(fullPath) // set this because SendFile does not set the filename when using Download: true
+	return ctx.SendFile(fullPath, fiber.SendFile{
+		ByteRange: true,
+	})
 }
 
 // @Summary Presigned download
@@ -126,17 +124,15 @@ func (c *Controller) presignedDownload(ctx fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	f, info, err := c.fileSvc.GetFileStream(relPath)
+	fullPath, err := c.pathSvc.ValidatePath(relPath)
 	if err != nil {
-		logger.Warnf("error getting file stream at path %s: %v", relPath, err)
+		logger.Warnf("error validating path %s: %v", relPath, err)
 		return c.parseFiberError(err)
 	}
-
-	ctx.Set(fiber.HeaderContentDisposition, "attachment; filename*=UTF-8''"+url.PathEscape(info.Name()))
-	ctx.Set(fiber.HeaderContentType, "application/octet-stream")
-	ctx.Set(fiber.HeaderContentLength, strconv.FormatInt(info.Size(), 10))
-
-	return ctx.SendStream(f)
+	ctx.Attachment(fullPath) // set this because SendFile does not set the filename when using Download: true
+	return ctx.SendFile(fullPath, fiber.SendFile{
+		ByteRange: true,
+	})
 }
 
 // @Summary Create presigned URL
@@ -177,7 +173,7 @@ func (c *Controller) createPresignedURL(ctx fiber.Ctx) error {
 		ttlSeconds = n
 	}
 	ttl := time.Duration(ttlSeconds) * time.Second
-	
+
 	url, err := c.pathSvc.GeneratePresignedURL(fullPath, ttl)
 	if err != nil {
 		logger.Warnf("error creating presigned token for path %s: %v", path, err)
