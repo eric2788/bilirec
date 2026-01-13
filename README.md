@@ -79,6 +79,10 @@ go build -o bilirec main.go
 | `DATABASE_DIR` | 本地数据库目录（bbolt，用于持久化转换任务等） | `database` |
 | `CLOUDCONVERT_THRESHOLD` | 使用 CloudConvert 的文件大小阈值（字节） | `1073741824` (1 GB) |
 | `CLOUDCONVERT_API_KEY` | 可选：CloudConvert API Key（为空则禁用 CloudConvert） | (未设置) |
+| `UPLOAD_BUFFER_SIZE` | 上传时或向外部服务（如 CloudConvert）传输文件使用的缓冲区大小（字节） | `5242880` (5 MB) |
+| `DOWNLOAD_BUFFER_SIZE` | 文件下载 / 导出时使用的缓冲区大小（字节） | `5242880` (5 MB) |
+| `STREAM_WRITER_BUFFER_SIZE` | 流写入器（写入文件）缓冲区大小（字节） | `1048576` (1 MB) |
+| `LIVE_STREAM_WRITER_BUFFER_SIZE` | 实时流写入缓冲区（用于直播录制或实时下载，字节） | `5242880` (5 MB) |
 
 ### 示例配置
 
@@ -98,6 +102,10 @@ export CLOUDCONVERT_THRESHOLD=1073741824
 export CLOUDCONVERT_API_KEY=
 export BACKEND_HOST=localhost:8080
 export FRONTEND_URL=http://localhost:8080
+export UPLOAD_BUFFER_SIZE=5242880
+export DOWNLOAD_BUFFER_SIZE=5242880
+export STREAM_WRITER_BUFFER_SIZE=1048576
+export LIVE_STREAM_WRITER_BUFFER_SIZE=5242880
 export JWT_SECRET=bilirec_secret
 export DEBUG=false
 # 可选：启用 REST API 认证
@@ -184,6 +192,17 @@ Content-Type: application/json
   下载接口直接返回存储的文件，**不再支持**通过查询参数进行即时格式转换（此前的 `?format=...` 参数已移除）。
   若要将录制的 FLV 转为 MP4，请启用 `CONVERT_FLV_TO_MP4`：在录制完成时，recorder 会将 FLV 文件加入转换队列，由后台任务异步转换为 MP4（转换行为受 `DELETE_FLV_AFTER_CONVERT` 控制）。
   当同时设置了 `CLOUDCONVERT_API_KEY` 且文件大小 >= `CLOUDCONVERT_THRESHOLD`（默认 1 GB）时，系统会优先使用 CloudConvert（异步任务，可通过 `/convert/tasks` 查询转换状态）；否则由本地 ffmpeg 后台任务处理。
+
+- **临时 / 预签名下载（Presigned）**
+  ```
+  POST /files/presigned/{path}?ttl=<seconds>
+  ```
+  该接口需要身份认证（JWT），用于为文件创建一个临时的预签名下载令牌（`ttl` 可选，单位秒，默认 3600）。成功创建后会返回包含临时令牌或 URL 的响应。使用该令牌可以进行匿名下载：
+
+  ```
+  GET /files/tempdownload?presigned=<token>
+  ```
+  `GET /files/tempdownload` 无需认证，但必须提供有效的 `presigned` 查询参数。该临时链接会在创建时设置过期时间，过期后将无法使用。
 
 - **删除多个文件**
   ```
