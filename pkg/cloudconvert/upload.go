@@ -10,8 +10,9 @@ import (
 )
 
 func (c *Client) CreateImportURLTask(payload *ImportURLRequest) (*TaskResponse, error) {
-	req := c.client.R().SetContext(c.ctx)
-	req.SetBody(payload)
+	req := c.client.R().
+		SetContext(c.ctx).
+		SetBody(payload)
 
 	res, err := req.Post("/import/url")
 	if err != nil {
@@ -109,4 +110,22 @@ func (c *Client) UploadFileToTask(f *os.File, task *ImportUploadTask) error {
 	}
 
 	return nil
+}
+
+func (c *Client) CreateImportS3Task(payload *ImportS3Request) (*TaskResponse, error) {
+	req := c.client.R().
+		SetContext(c.ctx).
+		SetBody(payload)
+
+	res, err := req.Post("/import/s3")
+	if err != nil {
+		return nil, err
+	} else if res.StatusCode() < 200 || res.StatusCode() >= 400 {
+		return nil, fmt.Errorf("create import s3 task failed with status code %d: %s", res.StatusCode(), res.String())
+	}
+	var taskRes TaskResponse
+	if err := json.Unmarshal(res.Body(), &taskRes); err != nil {
+		return nil, err
+	}
+	return &taskRes, nil
 }
