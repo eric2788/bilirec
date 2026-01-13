@@ -5,8 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/eric2788/bilirec/internal/modules/config"
+	"github.com/eric2788/bilirec/pkg/signeddownload"
+	"github.com/eric2788/bilirec/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -15,15 +18,52 @@ var logger = logrus.WithField("service", "path")
 var ErrFileNotFound = fmt.Errorf("file not found")
 var ErrInvalidFilePath = fmt.Errorf("invalid file path")
 var ErrAccessDenied = fmt.Errorf("access denied")
+var ErrTokenExpired = fmt.Errorf("token expired")
 
 type Service struct {
-	cfg *config.Config
+	cfg       *config.Config
+	presigner *signeddownload.Client
 }
 
 func NewService(cfg *config.Config) *Service {
 	return &Service{
-		cfg: cfg,
+		cfg:       cfg,
+		presigner: signeddownload.NewClient([]byte(cfg.JwtSecret)),
 	}
+}
+
+func (s *Service) GeneratePresignedURL(fullPath string, expireAfter time.Duration) (string, error) {
+	relPath, err := s.GetRelativePath(fullPath)
+	if err != nil {
+		return "", err
+	}
+	token, err := s.presigner.GenerateDownloadToken(relPath, time.Now().Add(expireAfter).Unix())
+	if err != nil {
+		return "", err
+	}
+	baseURL := utils.TernaryFunc(
+		s.cfg.BackendHost == "",
+		func() string { return "" },
+		func() string {
+			return utils.Ternary(
+				strings.Contains(s.cfg.BackendHost, "localhost"),
+				"http://"+s.cfg.BackendHost,
+				"https://"+s.cfg.BackendHost,
+			)
+		},
+	)
+	return fmt.Sprintf("%s/files/tempdownload?presigned=%s", baseURL, token), nil
+}
+
+func (s *Service) ParsePresignedURLToken(token string) (string, error) {
+	claim, err := s.presigner.ParseDownloadToken(token)
+	if err != nil {
+		return "", err
+	}
+	if time.Now().Unix() > claim.Exp {
+		return "", ErrTokenExpired
+	}
+	return claim.FilePath, nil
 }
 
 func (s *Service) ValidatePath(path string) (string, error) {

@@ -28,6 +28,12 @@ type ImportExportBaseData struct {
 	EndedAt   string     `json:"ended_at"`
 }
 
+type ImportURLRequest struct {
+	URL      string `json:"url"`
+	Filename string `json:"filename,omitempty"`
+	Headers  any    `json:"headers,omitempty"`
+}
+
 type ImportUploadRequest struct {
 	Redirect string `json:"redirect,omitempty"`
 }

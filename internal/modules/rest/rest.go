@@ -23,6 +23,7 @@ package rest
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	_ "github.com/eric2788/bilirec/docs"
@@ -96,6 +97,23 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 		)
 		app.Post("/logout", logoutHandler(cfg))
 		app.Use(jwt.New(jwt.Config{
+			Next: func(c fiber.Ctx) bool {
+				// paths that don't require JWT authentication
+				exemptPaths := []string{
+					"/files/tempdownload",
+				}
+				// allow CORS preflight requests
+				if c.Method() == "OPTIONS" {
+					return true
+				}
+				path := c.Path()
+				for _, p := range exemptPaths {
+					if strings.HasPrefix(path, p) {
+						return true
+					}
+				}
+				return false
+			},
 			Extractor:  extractors.FromCookie(jwtTokenKey),
 			SigningKey: jwt.SigningKey{Key: []byte(cfg.JwtSecret)},
 			ErrorHandler: func(c fiber.Ctx, err error) error {

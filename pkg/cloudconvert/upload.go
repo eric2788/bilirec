@@ -9,6 +9,23 @@ import (
 	"os"
 )
 
+func (c *Client) CreateImportURLTask(payload *ImportURLRequest) (*TaskResponse, error) {
+	req := c.client.R().SetContext(c.ctx)
+	req.SetBody(payload)
+
+	res, err := req.Post("/import/url")
+	if err != nil {
+		return nil, err
+	} else if res.StatusCode() < 200 || res.StatusCode() >= 400 {
+		return nil, fmt.Errorf("create import url task failed with status code %d: %s", res.StatusCode(), res.String())
+	}
+	var taskRes TaskResponse
+	if err := json.Unmarshal(res.Body(), &taskRes); err != nil {
+		return nil, err
+	}
+	return &taskRes, nil
+}
+
 func (c *Client) CreateUploadTask(redirect ...string) (*ImportUploadResponse, error) {
 	req := c.client.R().SetContext(c.ctx)
 

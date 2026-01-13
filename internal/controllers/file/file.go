@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/eric2788/bilirec/internal/services/file"
 	"github.com/eric2788/bilirec/internal/services/path"
@@ -36,6 +37,8 @@ func NewController(
 
 	files.Get("/browse/*", fc.listFiles)
 	files.Get("/download/*", fc.downloadFile)
+	files.Get("/tempdownload", fc.presignedDownload)
+	files.Post("/presigned/*", fc.createPresignedURL)
 
 	files.Delete("/batch", fc.deleteFiles)
 	files.Delete("/*", fc.deleteDir)
@@ -101,6 +104,91 @@ func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 	ctx.Set(fiber.HeaderContentLength, strconv.FormatInt(info.Size(), 10))
 
 	return ctx.SendStream(f)
+}
+
+// @Summary Presigned download
+// @Description Download a file using a presigned token (no auth required)
+// @Tags files
+// @Accept json
+// @Produce octet-stream
+// @Param presigned query string true "Presigned URL token"
+// @Success 200 {file} binary "File stream"
+// @Failure 400 {string} string "Bad request"
+// @Failure 403 {string} string "Forbidden"
+// @Failure 404 {string} string "Not found"
+// @Router /files/tempdownload [get]
+func (c *Controller) presignedDownload(ctx fiber.Ctx) error {
+	token := ctx.Query("presigned", "")
+	if token == "" {
+		return fiber.ErrBadRequest
+	}
+	relPath, err := c.pathSvc.ParsePresignedURLToken(token)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	f, info, err := c.fileSvc.GetFileStream(relPath)
+	if err != nil {
+		logger.Warnf("error getting file stream at path %s: %v", relPath, err)
+		return c.parseFiberError(err)
+	}
+
+	ctx.Set(fiber.HeaderContentDisposition, "attachment; filename*=UTF-8''"+url.PathEscape(info.Name()))
+	ctx.Set(fiber.HeaderContentType, "application/octet-stream")
+	ctx.Set(fiber.HeaderContentLength, strconv.FormatInt(info.Size(), 10))
+
+	return ctx.SendStream(f)
+}
+
+// @Summary Create presigned URL
+// @Description Create a presigned token for downloading a file. Accepts optional "ttl" query in seconds (default 3600).
+// @Tags files
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param path path string true "File path"
+// @Param ttl query int false "TTL in seconds"
+// @Success 201 {object} PresignedURLResponse "Presigned URL response"
+// @Failure 400 {string} string "Bad request"
+// @Failure 403 {string} string "Forbidden"
+// @Failure 404 {string} string "Not found"
+// @Router /files/presigned/{path} [post]
+func (c *Controller) createPresignedURL(ctx fiber.Ctx) error {
+	raw := ctx.Params("*", "/")
+	path, err := url.PathUnescape(raw)
+	if err != nil {
+		return fiber.ErrBadRequest
+	} else if c.recorderSvc.IsRecording(path) {
+		return fiber.NewError(fiber.StatusBadRequest, "無法為正在錄製的文件產生臨時下載連結")
+	}
+
+	fullPath, err := c.pathSvc.ValidatePath(path)
+	if err != nil {
+		logger.Warnf("error validating path %s: %v", path, err)
+		return c.parseFiberError(err)
+	}
+
+	ttlStr := ctx.Query("ttl", "")
+	ttlSeconds := int64(3600)
+	if ttlStr != "" {
+		n, err := strconv.ParseInt(ttlStr, 10, 64)
+		if err != nil || n <= 0 {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid ttl")
+		}
+		ttlSeconds = n
+	}
+	ttl := time.Duration(ttlSeconds) * time.Second
+	
+	url, err := c.pathSvc.GeneratePresignedURL(fullPath, ttl)
+	if err != nil {
+		logger.Warnf("error creating presigned token for path %s: %v", path, err)
+		return fiber.ErrInternalServerError
+	}
+
+	resp := &PresignedURLResponse{
+		URL:       url,
+		ExpiresIn: int(ttl.Seconds()),
+	}
+	return ctx.Status(fiber.StatusCreated).JSON(resp)
 }
 
 // @Summary Delete multiple files
