@@ -104,6 +104,9 @@ func (c *Controller) cancelTask(ctx fiber.Ctx) error {
 // @Param delete query bool false "Whether to delete the original file after conversion" default(false)
 // @Success 200 {object} convert.TaskQueue "Enqueued convert task"
 // @Failure 400 {string} string "Bad Request"
+// @Failure 404 {string} string "Not Found"
+// @Failure 409 {string} string "Conflict: File already in convert queue"
+// @Failure 403 {string} string "Forbidden"
 // @Failure 500 {string} string "Internal server error"
 // @Router /convert/tasks/{path} [post]
 func (c *Controller) enqueueTask(ctx fiber.Ctx) error {
@@ -117,6 +120,12 @@ func (c *Controller) enqueueTask(ctx fiber.Ctx) error {
 	if err != nil {
 		logger.Warnf("error validating file path %s: %v", path, err)
 		return c.parseFiberError(err)
+	}
+	if inQueue, err := c.convertSvc.IsInQueue(fullPath); err != nil {
+		logger.Errorf("error checking if path %s is in convert queue: %v", path, err)
+		return c.parseFiberError(err)
+	} else if inQueue {
+		return fiber.NewError(fiber.StatusConflict, "該文件已在轉檔佇列中")
 	}
 	// currnetly only support converting to mp4
 	if q, err := c.convertSvc.Enqueue(fullPath, "mp4", delete); err != nil {
