@@ -1,6 +1,12 @@
 package signeddownload
 
-import "github.com/golang-jwt/jwt/v5"
+import (
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+)
+
+const DefaultExpireAfter = 24 * time.Hour
 
 type Client struct {
 	jwtSecret []byte

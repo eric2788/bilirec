@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/eric2788/bilirec/internal/modules/config"
+	"github.com/eric2788/bilirec/internal/services/path"
 	"github.com/eric2788/bilirec/pkg/cloudconvert"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/sirupsen/logrus"
@@ -30,7 +31,7 @@ type Service struct {
 	db             *bbolt.DB
 }
 
-func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
+func NewService(ls fx.Lifecycle, cfg *config.Config, pathSvc *path.Service) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	svc := &Service{
@@ -46,6 +47,7 @@ func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
 				cfg.CloudConvertApiKey,
 				cloudconvert.WithUploadBufferSize(config.ReadOnly.UploadBufferSize()),
 			),
+			pathSvc,
 		)
 	} else {
 		logger.Info("cloud convert api key not provided, cloud convert disabled")
