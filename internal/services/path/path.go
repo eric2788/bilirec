@@ -97,7 +97,13 @@ func (s *Service) GetRelativePath(fullPath string) (string, error) {
 		return "", err
 	}
 
-	rel, err := filepath.Rel(baseAbs, fullPath)
+	// Convert fullPath to absolute path first to handle relative paths
+	fullPathAbs, err := filepath.Abs(fullPath)
+	if err != nil {
+		return "", err
+	}
+
+	rel, err := filepath.Rel(baseAbs, fullPathAbs)
 	if err != nil {
 		return "", err
 	}
