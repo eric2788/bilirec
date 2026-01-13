@@ -101,6 +101,22 @@ func (s *Service) Enqueue(path, format string, deleteSource bool) (*TaskQueue, e
 	return manager.Enqueue(path, outputFormat, format, deleteSource)
 }
 
+
+// IsInQueue checks if the given full path is already in the convert queue.
+// It must be full path
+func (s *Service) IsInQueue(fullPath string) (bool, error) {
+	queues, err := s.ListInProgress()
+	if err != nil {
+		return false, err
+	}
+	for _, q := range queues {
+		if q.InputPath == fullPath {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *Service) Cancel(taskID string) error {
 	if err := s.checkAvailableManagers(); err != nil {
 		return err
