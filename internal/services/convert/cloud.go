@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"github.com/eric2788/bilirec/internal/modules/config"
+	"github.com/eric2788/bilirec/internal/services/path"
 	"github.com/eric2788/bilirec/pkg/cloudconvert"
 	"github.com/eric2788/bilirec/pkg/ds"
 	"github.com/eric2788/bilirec/pkg/pool"
+	"github.com/eric2788/bilirec/pkg/signeddownload"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"
@@ -28,9 +30,11 @@ type cloudConvertManager struct {
 	downloading  ds.Set[string]
 	downloadPool *pool.BytesPool
 	concurrent   *semaphore.Weighted
+
+	pathSvc *path.Service
 }
 
-func newCloudConvertManager(client *cloudconvert.Client) ConvertManager {
+func newCloudConvertManager(client *cloudconvert.Client, pathSvc *path.Service) ConvertManager {
 	return &cloudConvertManager{
 		logger:       logger.WithField("manager", "cloudconvert"),
 		client:       client,
@@ -38,6 +42,7 @@ func newCloudConvertManager(client *cloudconvert.Client) ConvertManager {
 		downloading:  ds.NewSyncedSet[string](),
 		downloadPool: pool.NewBytesPool(config.ReadOnly.DownloadBufferSize()),
 		concurrent:   semaphore.NewWeighted(2),
+		pathSvc:      pathSvc,
 	}
 }
 
@@ -57,16 +62,16 @@ func (c *cloudConvertManager) StartWorker(ctx context.Context, db *bbolt.DB) err
 }
 
 func (c *cloudConvertManager) Enqueue(inputPath, outputPath, format string, deleteSource bool) (*TaskQueue, error) {
-	file, err := os.Open(inputPath)
+	url, err := c.pathSvc.GeneratePresignedURL(inputPath, signeddownload.DefaultExpireAfter)
 	if err != nil {
 		return nil, err
 	}
 
-	defer file.Close()
-	task, err := c.client.CreateUploadTask()
+	task, err := c.client.CreateImportURLTask(&cloudconvert.ImportURLRequest{
+		URL:      url,
+		Filename: filepath.Base(inputPath),
+	})
 	if err != nil {
-		return nil, err
-	} else if err := c.client.UploadFileToTask(file, &task.Data); err != nil {
 		return nil, err
 	}
 
