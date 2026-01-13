@@ -59,22 +59,18 @@ func (c *Client) ListTasks(f *TaskListFilter) (*TaskListResponse, error) {
 	return &taskListRes, nil
 }
 
-func (c *Client) CancelTask(taskID string) (bool, error) {
+func (c *Client) CancelTask(taskID string) error {
 	req := c.client.R().
 		SetContext(c.ctx).
 		SetPathParam("id", taskID)
 	res, err := req.Post("/tasks/{id}/cancel")
 	if err != nil {
-		return false, err
+		return err
 	}
-	switch res.StatusCode() {
-	case 200, 204:
-		return true, nil
-	case 404:
-		return false, nil
-	default:
-		return false, fmt.Errorf("%d: %s", res.StatusCode(), res.String())
+	if res.StatusCode() != 200 && res.StatusCode() != 204 {
+		return fmt.Errorf("%d: %s", res.StatusCode(), res.String())
 	}
+	return nil
 }
 
 func (c *Client) RetryTask(taskID string) (bool, error) {
