@@ -15,7 +15,6 @@ import (
 
 	"github.com/eric2788/bilirec/pkg/cloudconvert"
 	"github.com/eric2788/bilirec/pkg/pool"
-	"github.com/eric2788/bilirec/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -691,9 +690,9 @@ func TestMemoryUsage_DownloadWithStreamToFile(t *testing.T) {
 
 	t.Logf("downloading to file: %v", outputPath)
 
-	downloadPool := pool.NewBytesPool(5 * 1024 * 1024) // 5MB buffer pool
+	writer := pool.NewFileStreamWriter(t.Context(), pool.NewBytesPool(5*1024*1024))
 
-	if err := utils.StreamToFile(t.Context(), stream, outputPath, downloadPool); err != nil {
+	if err := writer.WriteToFile(stream, outputPath, 1*1024*1024); err != nil {
 		t.Fatalf("StreamToFile failed: %v", err)
 	}
 
@@ -739,7 +738,7 @@ func TestMemoryUsage_DownloadWithStreamToFile(t *testing.T) {
 		"-----------------------------------------------------------------------------\n"+
 		"Memory Increase / File Size Ratio: %.2fx\n"+
 		"GC Count Increase: %d\n"+
-		"Buffer Pool Size: %d KB (from downloadPool)\n"+
+		"Buffer Pool Size: 5 MB (from downloadPool)\n"+
 		"=============================================================================\n",
 		filename,
 		fileSizeMB,
@@ -752,7 +751,6 @@ func TestMemoryUsage_DownloadWithStreamToFile(t *testing.T) {
 		afterGCStats.AllocMB, afterGCStats.AllocMB-beforeStats.AllocMB,
 		memoryRatio,
 		afterDownloadStats.NumGC-beforeStats.NumGC,
-		downloadPool.BufferSize/1024,
 	)
 
 	// Check for memory issues

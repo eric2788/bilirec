@@ -4,6 +4,8 @@ import (
 	"sync"
 )
 
+const DefaultBufferSize = 5 * 1024 * 1024 // 5MB
+
 type BytesPool struct {
 	*sync.Pool
 	BufferSize int

@@ -185,7 +185,7 @@ func (r *Service) prepare(roomId int, ch <-chan []byte, ctx context.Context, inf
 		processors.NewFlvStreamFixer(),
 		// write to file with buffered writer
 		// flushes every 5 seconds then writes to disk
-		processors.NewBufferedStreamWriter(info.outputPath),
+		processors.NewBufferedStreamWriter(info.outputPath, config.ReadOnly.LiveStreamWriterBufferSize()),
 	)
 
 	startCtx, startCancel := context.WithTimeout(ctx, 10*time.Second)

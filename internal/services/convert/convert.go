@@ -41,7 +41,11 @@ func NewService(ls fx.Lifecycle, cfg *config.Config) *Service {
 
 	if cfg.CloudConvertApiKey != "" {
 		svc.managers["cloudconvert"] = newCloudConvertManager(
-			cloudconvert.NewClient(ctx, cfg.CloudConvertApiKey),
+			cloudconvert.NewClient(
+				ctx,
+				cfg.CloudConvertApiKey,
+				cloudconvert.WithUploadBufferSize(config.ReadOnly.UploadBufferSize()),
+			),
 		)
 	} else {
 		logger.Info("cloud convert api key not provided, cloud convert disabled")

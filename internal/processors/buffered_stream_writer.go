@@ -12,22 +12,24 @@ import (
 )
 
 type BufferedStreamWriterProcessor struct {
-	mu     sync.Mutex
-	file   *os.File
-	path   string
-	writer *bufio.Writer
-	logger *logrus.Entry
+	mu         sync.Mutex
+	file       *os.File
+	path       string
+	bufferSize int
+	writer     *bufio.Writer
+	logger     *logrus.Entry
 
 	ctx    context.Context
 	cancel context.CancelFunc
 	wait   sync.WaitGroup
 }
 
-func NewBufferedStreamWriter(path string) *pipeline.ProcessorInfo[[]byte] {
+func NewBufferedStreamWriter(path string, bufferSize int) *pipeline.ProcessorInfo[[]byte] {
 	return pipeline.NewProcessorInfo(
 		"buffered-writer",
 		&BufferedStreamWriterProcessor{
-			path: path,
+			path:       path,
+			bufferSize: bufferSize,
 		},
 		pipeline.WithTimeout[[]byte](30*time.Second),
 	)
@@ -39,7 +41,7 @@ func (w *BufferedStreamWriterProcessor) Open(ctx context.Context, log *logrus.En
 		return err
 	}
 	w.file = file
-	w.writer = bufio.NewWriterSize(file, 5*1024*1024) // 5MB: optimal for 1080p30fps (4.5Mbps = 2.81MB/5s)
+	w.writer = bufio.NewWriterSize(file, w.bufferSize)
 	w.logger = log.WithField("file", file.Name())
 	w.ctx, w.cancel = context.WithCancel(context.Background())
 	w.wait.Add(2)

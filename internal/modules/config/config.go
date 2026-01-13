@@ -36,6 +36,12 @@ type Config struct {
 
 	Debug          bool
 	ProductionMode bool
+
+	// configurable global performances
+	uploadBufferSize           int
+	downloadBufferSize         int
+	streamWriterBufferSize     int
+	liveStreamWriterBufferSize int
 }
 
 func provider() (*Config, error) {
@@ -59,7 +65,6 @@ func provider() (*Config, error) {
 	}
 
 	// parse frontend url
-
 	url, err := url.Parse(utils.EmptyOrElse(os.Getenv("FRONTEND_URL"), "http://localhost:8080"))
 
 	if err != nil {
@@ -74,7 +79,7 @@ func provider() (*Config, error) {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	return &Config{
+	c := &Config{
 		AnonymousLogin:          os.Getenv("ANONYMOUS_LOGIN") == "true",
 		Port:                    utils.EmptyOrElse(os.Getenv("PORT"), "8080"),
 		MaxConcurrentRecordings: utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_CONCURRENT_RECORDINGS"), "3")),
@@ -94,7 +99,16 @@ func provider() (*Config, error) {
 		JwtSecret:               utils.EmptyOrElse(os.Getenv("JWT_SECRET"), "bilirec_secret"),
 		Debug:                   debug,
 		ProductionMode:          os.Getenv("PRODUCTION_MODE") == "true",
-	}, nil
+
+		// global performance configs
+		uploadBufferSize:           utils.MustAtoi(utils.EmptyOrElse(os.Getenv("UPLOAD_BUFFER_SIZE"), "5242880")),             // default 5MB
+		downloadBufferSize:         utils.MustAtoi(utils.EmptyOrElse(os.Getenv("DOWNLOAD_BUFFER_SIZE"), "5242880")),           // default 5MB
+		streamWriterBufferSize:     utils.MustAtoi(utils.EmptyOrElse(os.Getenv("STREAM_WRITER_BUFFER_SIZE"), "1048576")),      // default 1MB
+		liveStreamWriterBufferSize: utils.MustAtoi(utils.EmptyOrElse(os.Getenv("LIVE_STREAM_WRITER_BUFFER_SIZE"), "5242880")), // 5MB: optimal for 1080p30fps (4.5Mbps = 2.81MB/5s)
+	}
+
+	ReadOnly = &GlobalReadOnly{config: c}
+	return c, nil
 }
 
 var Module = fx.Module("config", fx.Provide(provider))

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/eric2788/bilirec/internal/modules/config"
 	"github.com/eric2788/bilirec/pkg/cloudconvert"
 	"github.com/eric2788/bilirec/pkg/ds"
 	"github.com/eric2788/bilirec/pkg/pool"
@@ -17,7 +18,6 @@ import (
 )
 
 const cloudConvertBucket = "Queue_CloudConvert"
-const downloadBufferSize = 5 * 1024 * 1024 // 5MB
 
 type cloudConvertManager struct {
 	db         *bbolt.DB
@@ -32,12 +32,11 @@ type cloudConvertManager struct {
 
 func newCloudConvertManager(client *cloudconvert.Client) ConvertManager {
 	return &cloudConvertManager{
-		logger:     logger.WithField("manager", "cloudconvert"),
-		client:     client,
-		serializer: pool.NewSerializer(),
-
+		logger:       logger.WithField("manager", "cloudconvert"),
+		client:       client,
+		serializer:   pool.NewSerializer(),
 		downloading:  ds.NewSyncedSet[string](),
-		downloadPool: pool.NewBytesPool(downloadBufferSize),
+		downloadPool: pool.NewBytesPool(config.ReadOnly.DownloadBufferSize()),
 		concurrent:   semaphore.NewWeighted(2),
 	}
 }
@@ -292,7 +291,8 @@ func (c *cloudConvertManager) downloadExportedFile(ctx context.Context, url, out
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Minute)
 	defer cancel()
 
-	return utils.StreamToFile(ctx, rc, outPath, c.downloadPool)
+	writer := pool.NewFileStreamWriter(ctx, c.downloadPool)
+	return writer.WriteToFile(rc, outPath, config.ReadOnly.DownloadWriterBufferSize())
 }
 
 func (c *cloudConvertManager) mutate(fn func(bucket *bbolt.Bucket) error) error {

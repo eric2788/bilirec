@@ -10,7 +10,6 @@ import (
 
 	"github.com/eric2788/bilirec/pkg/cloudconvert"
 	"github.com/eric2788/bilirec/pkg/pool"
-	"github.com/eric2788/bilirec/utils"
 )
 
 // startCPUProfile starts a CPU profile and returns the profile file path and a stop func
@@ -143,9 +142,9 @@ func TestCPUUsage_Download(t *testing.T) {
 
 	defer os.Remove("tmp/" + filename)
 
-	p := pool.NewBytesPool(1024 * 1024) // 1MB pool
+	writer := pool.NewFileStreamWriter(t.Context(), pool.NewBytesPool(5*1024*1024))
 
-	if err := utils.StreamToFile(t.Context(), stream, "/tmp/"+filename, p); err != nil {
+	if err := writer.WriteToFile(stream, "/tmp/"+filename, 1*1024*1024); err != nil {
 		t.Fatal(err)
 	}
 

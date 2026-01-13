@@ -10,6 +10,8 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+type Option func(*Client)
+
 type Client struct {
 	client       *resty.Client
 	streamClient *http.Client
@@ -18,7 +20,7 @@ type Client struct {
 	uploadPool *pool.BytesPool
 }
 
-func NewClient(ctx context.Context, apiKey string) *Client {
+func NewClient(ctx context.Context, apiKey string, opts ...Option) *Client {
 
 	client := resty.New().
 		SetBaseURL("https://api.cloudconvert.com/v2/").
@@ -49,10 +51,22 @@ func NewClient(ctx context.Context, apiKey string) *Client {
 		},
 	}
 
-	return &Client{
+	c := &Client{
 		client:       client,
 		streamClient: streamClient,
 		ctx:          ctx,
-		uploadPool:   pool.NewBytesPool(5 * 1024 * 1024), // 5MB
+		uploadPool:   pool.NewBytesPool(pool.DefaultBufferSize),
+	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c
+}
+
+func WithUploadBufferSize(size int) Option {
+	return func(c *Client) {
+		c.uploadPool = pool.NewBytesPool(size)
 	}
 }

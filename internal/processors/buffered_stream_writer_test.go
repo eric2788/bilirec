@@ -20,7 +20,7 @@ func TestBufferedStreamWriter_MemoryLeak(t *testing.T) {
 	testFile := filepath.Join(tempDir, "test_output.flv")
 
 	// Create pipeline with buffered writer
-	writerInfo := processors.NewBufferedStreamWriter(testFile)
+	writerInfo := processors.NewBufferedStreamWriter(testFile, 5*1024*1024) // 5MB buffer
 	pipe := pipeline.New(writerInfo)
 
 	ctx := context.Background()
@@ -172,7 +172,7 @@ func TestBufferedStreamWriter_ConcurrentMemoryLeak(t *testing.T) {
 			defer func() { done <- true }()
 
 			testFile := filepath.Join(tempDir, "test_concurrent_"+string(rune('0'+id))+".flv")
-			writerInfo := processors.NewBufferedStreamWriter(testFile)
+			writerInfo := processors.NewBufferedStreamWriter(testFile, 5*1024*1024) // 5MB buffer
 			pipe := pipeline.New(writerInfo)
 
 			ctx := context.Background()
@@ -228,7 +228,7 @@ func TestBufferedStreamWriter_LongRunningMemoryProfile(t *testing.T) {
 	tempDir := t.TempDir()
 	testFile := filepath.Join(tempDir, "test_long_running.flv")
 
-	writerInfo := processors.NewBufferedStreamWriter(testFile)
+	writerInfo := processors.NewBufferedStreamWriter(testFile, 5*1024*1024) // 5MB buffer
 	pipe := pipeline.New(writerInfo)
 
 	ctx := context.Background()
@@ -306,7 +306,7 @@ func TestBufferedStreamWriter_NoReturnedDataLeak(t *testing.T) {
 	tempDir := t.TempDir()
 	testFile := filepath.Join(tempDir, "test_return_leak.flv")
 
-	writerInfo := processors.NewBufferedStreamWriter(testFile)
+	writerInfo := processors.NewBufferedStreamWriter(testFile, 5*1024*1024) // 5MB buffer
 	pipe := pipeline.New(writerInfo)
 
 	ctx := context.Background()
