@@ -96,12 +96,13 @@ func (c *cloudConvertManager) Enqueue(inputPath, outputPath, format string, dele
 	}
 
 	queue := &TaskQueue{
-		TaskID:       exporter.Data.ID,
-		InputPath:    inputPath,
-		OutputPath:   outputPath,
-		InputFormat:  originalFormat,
-		OutputFormat: format,
-		DeleteSource: deleteSource,
+		TaskID:        exporter.Data.ID,
+		ConvertTaskID: res.Data.ID,
+		InputPath:     inputPath,
+		OutputPath:    outputPath,
+		InputFormat:   originalFormat,
+		OutputFormat:  format,
+		DeleteSource:  deleteSource,
 	}
 
 	err = c.mutate(func(bucket *bbolt.Bucket) error {
@@ -116,10 +117,23 @@ func (c *cloudConvertManager) Enqueue(inputPath, outputPath, format string, dele
 }
 
 func (c *cloudConvertManager) Cancel(taskID string) error {
-	if exist, err := c.client.CancelTask(taskID); err != nil {
+	var convertTaskID string
+	if err := c.read(func(bucket *bbolt.Bucket) error {
+		v := bucket.Get([]byte(taskID))
+		if v == nil {
+			return ErrTaskNotFound
+		}
+		var queue TaskQueue
+		if err := c.serializer.Deserialize(v, &queue); err != nil {
+			return fmt.Errorf("deserialize task %s: %w", string(taskID), err)
+		}
+		convertTaskID = queue.ConvertTaskID
+		return nil
+	}); err != nil {
 		return err
-	} else if !exist {
-		return ErrTaskNotFound
+	}
+	if err := c.client.CancelTask(utils.EmptyOrElse(convertTaskID, taskID)); err != nil {
+		return err
 	}
 	return c.mutate(func(bucket *bbolt.Bucket) error {
 		return bucket.Delete([]byte(taskID))

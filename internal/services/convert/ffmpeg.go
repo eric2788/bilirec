@@ -9,6 +9,7 @@ import (
 
 	"github.com/eric2788/bilirec/pkg/pool"
 	"github.com/eric2788/bilirec/utils"
+	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"
 )
@@ -20,6 +21,8 @@ type ffmpegConvertManager struct {
 	logger     *logrus.Entry
 	serializer *pool.Serializer
 	getActives GetActiveRecordings
+
+	processing *xsync.Map[string, context.CancelFunc]
 }
 
 func newFFmpegConvertManager(getActives GetActiveRecordings) ConvertManager {
@@ -27,6 +30,7 @@ func newFFmpegConvertManager(getActives GetActiveRecordings) ConvertManager {
 		logger:     logger.WithField("manager", "ffmpeg"),
 		serializer: pool.NewSerializer(),
 		getActives: getActives,
+		processing: xsync.NewMap[string, context.CancelFunc](),
 	}
 }
 
@@ -68,6 +72,9 @@ func (f *ffmpegConvertManager) Enqueue(inputPath, outputPath, format string, del
 }
 
 func (f *ffmpegConvertManager) Cancel(taskID string) error {
+	if cancel, ok := f.processing.LoadAndDelete(taskID); ok {
+		cancel()
+	}
 	return f.mutate(func(bucket *bbolt.Bucket) error {
 		if bucket.Get([]byte(taskID)) == nil {
 			return ErrTaskNotFound
@@ -151,7 +158,15 @@ func (f *ffmpegConvertManager) processTask(ctx context.Context, queue *TaskQueue
 		return nil
 	}
 
-	cmd := exec.CommandContext(ctx,
+	processCtx, cancel := context.WithCancel(ctx)
+	f.processing.Store(queue.TaskID, cancel)
+	defer func() {
+		if cancel, ok := f.processing.LoadAndDelete(queue.TaskID); ok {
+			cancel()
+		}
+	}()
+
+	cmd := exec.CommandContext(processCtx,
 		"ffmpeg",
 		"-hide_banner",
 		"-i",
