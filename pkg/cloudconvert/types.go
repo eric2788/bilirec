@@ -38,6 +38,18 @@ type ImportUploadRequest struct {
 	Redirect string `json:"redirect,omitempty"`
 }
 
+type ImportS3Request struct {
+	Bucket          string `json:"bucket"`
+	Region          string `json:"region"`
+	Endpoint        string `json:"endpoint,omitempty"`
+	Key             string `json:"key,omitempty"`        // S3 key of the input file (the filename in the bucket, including path).
+	KeyPrefix       string `json:"key_prefix,omitempty"` // Alternatively to using key, you can specify a key prefix for importing multiple files at once.
+	AccessKeyId     string `json:"access_key_id"`
+	SecretAccessKey string `json:"secret_access_key"`
+	SessionToken    string `json:"session_token,omitempty"`
+	Filename        string `json:"filename,omitempty"`
+}
+
 type ImportUploadForm struct {
 	URL        string         `json:"url"`
 	Parameters map[string]any `json:"parameters"`
