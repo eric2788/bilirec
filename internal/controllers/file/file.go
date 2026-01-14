@@ -3,10 +3,10 @@ package file
 import (
 	"net/url"
 	"os"
-	"slices"
 	"strconv"
 	"time"
 
+	"github.com/eric2788/bilirec/internal/services/convert"
 	"github.com/eric2788/bilirec/internal/services/file"
 	"github.com/eric2788/bilirec/internal/services/path"
 	"github.com/eric2788/bilirec/internal/services/recorder"
@@ -18,6 +18,7 @@ var logger = logrus.WithField("controller", "file")
 
 type Controller struct {
 	fileSvc     *file.Service
+	convertSvc  *convert.Service
 	recorderSvc *recorder.Service
 	pathSvc     *path.Service
 }
@@ -27,11 +28,13 @@ func NewController(
 	fileSvc *file.Service,
 	recorderSvc *recorder.Service,
 	pathSvc *path.Service,
+	convertSvc *convert.Service,
 ) *Controller {
 	fc := &Controller{
 		fileSvc:     fileSvc,
 		recorderSvc: recorderSvc,
 		pathSvc:     pathSvc,
+		convertSvc:  convertSvc,
 	}
 	files := app.Group("/files")
 
@@ -203,9 +206,23 @@ func (c *Controller) deleteFiles(ctx fiber.Ctx) error {
 	var paths []string
 	if err := ctx.Bind().Body(&paths); err != nil {
 		return fiber.ErrBadRequest
-	} else if slices.ContainsFunc(paths, c.recorderSvc.IsRecording) {
-		return fiber.NewError(fiber.StatusBadRequest, "要刪除的文件中包含正在錄製的文件")
-	} else if err := c.fileSvc.DeleteFiles(paths...); err != nil {
+	}
+
+	for _, p := range paths {
+		if c.recorderSvc.IsRecording(p) {
+			return fiber.NewError(fiber.StatusBadRequest, "要刪除的文件中包含正在錄製的文件")
+		} else if fullPath, err := c.pathSvc.ValidatePath(p); err != nil {
+			logger.Warnf("error validating path %s: %v", p, err)
+			return c.parseFiberError(err)
+		} else if inQueue, err := c.convertSvc.IsInQueue(fullPath); err != nil {
+			logger.Warnf("error checking convert queue for path %s: %v", p, err)
+			return fiber.ErrInternalServerError
+		} else if inQueue {
+			return fiber.NewError(fiber.StatusBadRequest, "要刪除的文件中包含正在轉檔的文件")
+		}
+	}
+
+	if err := c.fileSvc.DeleteFiles(paths...); err != nil {
 		logger.Warnf("error deleting files: %v", err)
 		return c.parseFiberError(err)
 	}
