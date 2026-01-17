@@ -127,7 +127,24 @@ func (f *ffmpegConvertManager) runTaskPeriodically(ctx context.Context) {
 				continue
 			}
 
+			deleteBucket := func() error {
+				return utils.WithRetry(3, f.logger, "delete bucket", func() error {
+					return f.mutate(func(bucket *bbolt.Bucket) error {
+						return bucket.Delete([]byte(queue.TaskID))
+					})
+				})
+			}
+
 			taskLog := f.logger.WithField("task_id", queue.TaskID)
+
+			if !utils.IsFileExists(queue.InputPath) {
+				taskLog.Warnf("input file %s no longer exists, cancelling task", queue.InputPath)
+				if err := deleteBucket(); err != nil {
+					taskLog.Errorf("failed to remove ffmpeg task from queue: %v", err)
+				}
+				continue
+			}
+
 			taskLog.Infof("processing ffmpeg task input=%s output=%s", queue.InputPath, queue.OutputPath)
 
 			if err := f.processTask(ctx, queue, taskLog); err != nil {
@@ -135,11 +152,7 @@ func (f *ffmpegConvertManager) runTaskPeriodically(ctx context.Context) {
 				continue
 			}
 
-			if err := utils.WithRetry(3, taskLog, "delete bucket", func() error {
-				return f.mutate(func(bucket *bbolt.Bucket) error {
-					return bucket.Delete([]byte(queue.TaskID))
-				})
-			}); err != nil {
+			if err := deleteBucket(); err != nil {
 				taskLog.Errorf("failed to remove ffmpeg task from queue: %v", err)
 				continue
 			}
