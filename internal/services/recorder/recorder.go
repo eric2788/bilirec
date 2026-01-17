@@ -405,5 +405,5 @@ func (r *Service) prepareFilePath(info *bili.LiveRoomInfo, start time.Time) (str
 		return "", err
 	}
 	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 15)
-	return fmt.Sprintf("%s/%s-%d.flv", dirPath, safeTitle, start.Unix()), nil
+	return fmt.Sprintf("%s/%s-%s.flv", dirPath, safeTitle, start.Format("20060102_150405")), nil
 }
