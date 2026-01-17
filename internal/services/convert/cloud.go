@@ -264,6 +264,19 @@ func (c *cloudConvertManager) onFailed(queue *TaskQueue, info *cloudconvert.Task
 	c.logger.Errorf("task %s failed with message: %s", queue.TaskID, *info.Message)
 	c.logger.Infof("re-enqueueing task %s", queue.TaskID)
 
+	deleteBucket := func() error {
+		return utils.WithRetry(3, c.logger, "delete bucket", func() error {
+			return c.mutate(func(bucket *bbolt.Bucket) error {
+				return bucket.Delete([]byte(queue.TaskID))
+			})
+		})
+	}
+
+	if !utils.IsFileExists(queue.InputPath) {
+		c.logger.Warnf("input file %s no longer exists, cancelling retry for task %s", queue.InputPath, queue.TaskID)
+		return deleteBucket()
+	}
+
 	// enqueue again
 	newInfo, err := c.Enqueue(queue.InputPath, queue.OutputPath, queue.OutputFormat, queue.DeleteSource)
 	if err != nil {
@@ -273,11 +286,7 @@ func (c *cloudConvertManager) onFailed(queue *TaskQueue, info *cloudconvert.Task
 
 	c.logger.Infof("re-enqueued task %s as new task %s", queue.TaskID, newInfo.TaskID)
 
-	err = utils.WithRetry(3, c.logger, "delete bucket", func() error {
-		return c.mutate(func(bucket *bbolt.Bucket) error {
-			return bucket.Delete([]byte(queue.TaskID))
-		})
-	})
+	err = deleteBucket()
 
 	if err != nil {
 		// cancel re-enqueued task if we failed to delete old one
