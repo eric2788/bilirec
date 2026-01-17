@@ -219,6 +219,17 @@ func (r *Service) rev(roomId int, ch <-chan []byte, info *Recorder, pipe *pipeli
 
 		if err != nil {
 			l.Errorf("error writing data to file: %v", err)
+			if err == processors.ErrNotFlvFile {
+				l.Warn("received FLV validation errors, stream may be unstable")
+				timer := time.NewTimer(5 * time.Second)
+				select {
+				case <-timer.C:
+					return
+				case <-r.ctx.Done():
+					timer.Stop()
+					return
+				}
+			}
 			return
 		}
 	}
@@ -319,6 +330,18 @@ func (r *Service) finalize(roomId int, info *Recorder) {
 	}
 
 	defer r.writtingFiles.Remove(filepath.Base(info.outputPath))
+
+	fileInfo, err := os.Stat(info.outputPath)
+	if err != nil {
+		logger.Errorf("failed to stat recorded file for room %d: %v", roomId, err)
+		return
+	} else if fileInfo.Size() < 1024 { // less than 1KB
+		logger.Warnf("recorded file for room %d is too small (%d bytes), skipping finallization and removing file", roomId, fileInfo.Size())
+		if err := os.Remove(info.outputPath); err != nil {
+			logger.Errorf("failed to remove empty file %s: %v", info.outputPath, err)
+		}
+		return
+	}
 
 	if !r.cfg.ConvertFLVToMp4 {
 		logger.Debug("no need to convert flv to mp4, skipped")
