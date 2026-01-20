@@ -21,6 +21,7 @@ func NewController(app *fiber.App, bilic *bilibili.Client) *Controller {
 	}
 	room := app.Group("/room")
 	room.Get("/:roomID/info", rc.getRoomInfo)
+	room.Get("/infos", rc.getRoomInfos)
 	room.Get("/:roomID/live", rc.isStreamLiving)
 	return rc
 }
@@ -53,6 +54,44 @@ func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 		)
 	}
 
+	return ctx.JSON(res)
+}
+
+// @Summary Get multiple room informations
+// @Description Get detailed information about multiple Bilibili live rooms
+// @Tags room
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param roomIDs query string true "Comma-separated list of Room IDs"
+// @Success 200 {object} map[string]bilibili.LiveRoomInfoDetail "Map of Room ID to Room information"
+// @Failure 400 {string} string "Invalid room IDs"
+// @Failure 500 {string} string "Internal server error"
+// @Router /room/infos [get]
+func (r *Controller) getRoomInfos(ctx fiber.Ctx) error {
+	roomIdsStr := ctx.Query("roomIDs", "")
+	if roomIdsStr == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "缺少 roomIDs 查詢參數")
+	}
+	roomIdStrs := utils.SplitAndTrim(roomIdsStr, ",")
+	roomIds := make([]int, 0, len(roomIdStrs))
+	for _, idStr := range roomIdStrs {
+		id, err := strconv.Atoi(idStr)
+		if err != nil {
+			logger.Warnf("cannot parse roomId to int: %v", err)
+			return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID: "+idStr)
+		}
+		roomIds = append(roomIds, id)
+	}
+	res, err := r.bilic.GetLiveRoomInfos(roomIds...)
+	if err != nil {
+		logger.Errorf("error getting room infos for rooms %v: %v", roomIds, err)
+		return utils.Ternary(
+			bilibili.IsErrRoomNotFound(err),
+			fiber.NewError(fiber.StatusNotFound, "部分或全部房間不存在"),
+			fiber.ErrInternalServerError,
+		)
+	}
 	return ctx.JSON(res)
 }
 

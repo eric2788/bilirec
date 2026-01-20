@@ -43,3 +43,15 @@ func AsciiFallback(name string) string {
 	}
 	return s
 }
+
+func SplitAndTrim(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	var result []string
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
