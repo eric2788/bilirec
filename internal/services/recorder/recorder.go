@@ -2,6 +2,7 @@ package recorder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,11 +36,13 @@ const Idle RecordStatus = "idle"
 var recordingPtr *RecordStatus = utils.Ptr(Recording)
 var recoveringPtr *RecordStatus = utils.Ptr(Recovering)
 
-var ErrMaxConcurrentRecordingsReached = fmt.Errorf("maximum concurrent recordings reached")
-var ErrRecordingStarted = fmt.Errorf("recording already started")
-var ErrStreamNotLive = fmt.Errorf("the room is not live streaming")
-var ErrEmptyStreamURLs = fmt.Errorf("no stream urls available")
-var ErrStreamURLsUnreachable = fmt.Errorf("all stream urls are unreachable")
+var ErrMaxConcurrentRecordingsReached = errors.New("maximum concurrent recordings reached")
+var ErrRecordingStarted = errors.New("recording already started")
+var ErrStreamNotLive = errors.New("the room is not live streaming")
+var ErrEmptyStreamURLs = errors.New("no stream urls available")
+var ErrStreamURLsUnreachable = errors.New("all stream urls are unreachable")
+var ErrRoomLocked = errors.New("the room is locked")
+var ErrRoomEncrypted = errors.New("the room is encrypted")
 
 type Recorder struct {
 	status     atomic.Pointer[RecordStatus]

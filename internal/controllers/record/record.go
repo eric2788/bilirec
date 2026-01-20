@@ -49,6 +49,10 @@ func (r *Controller) startRecording(ctx fiber.Ctx) error {
 		switch err {
 		case bilibili.ErrRoomNotFound:
 			return fiber.NewError(fiber.StatusNotFound, "房間不存在")
+		case recorder.ErrRoomLocked:
+			return fiber.NewError(fiber.StatusBadRequest, "房間已被封禁")
+		case recorder.ErrRoomEncrypted:
+			return fiber.NewError(fiber.StatusBadRequest, "房間已被上鎖")
 		case recorder.ErrEmptyStreamURLs:
 			return fiber.NewError(fiber.StatusBadRequest, "無可用的視頻流 URL")
 		case recorder.ErrStreamNotLive:
