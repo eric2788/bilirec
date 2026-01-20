@@ -69,6 +69,23 @@ func TestGetRoomInfoNotExistRoom(t *testing.T) {
 	t.Fatal("expected room not found error, but got none")
 }
 
+func TestGetLiveRoomInfo(t *testing.T) {
+	var client *bilibili.Client
+	app := fxtest.New(t,
+		config.Module,
+		bilibili.Module,
+		fx.Populate(&client),
+		fx.StartTimeout(25*time.Second),
+	)
+	app.RequireStart()
+	defer app.RequireStop()
+	info, err := client.GetLiveRoomInfo(8222458)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Room Info: %+v", info)
+}
+
 func TestGetStreamUrls(t *testing.T) {
 	var client *bilibili.Client
 	app := fxtest.New(t,
@@ -148,7 +165,7 @@ func TestHeaders(t *testing.T) {
 }
 
 func init() {
-	if os.Getenv("CI") != "" {
+	// if os.Getenv("CI") != "" {
 		os.Setenv("ANONYMOUS_LOGIN", "true")
-	}
+	// }
 }

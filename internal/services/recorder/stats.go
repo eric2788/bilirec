@@ -55,12 +55,31 @@ func (r *Service) IsRecording(path string) bool {
 	return r.writtingFiles.Contains(filepath.Base(path))
 }
 
-// only works if the first relative path segment is the room ID
+// IsRecordingUnder checks if any recordings are happening under the given relative path.
+// The path format is {username}-{roomID} or {username}-{roomID}/{subpath}
 func (r *Service) IsRecordingUnder(relPath string) bool {
-	roomId, err := strconv.Atoi(strings.SplitN(filepath.Clean(relPath), string(os.PathSeparator), 2)[0])
+	// Normalize the path
+	cleanPath := filepath.Clean(relPath)
+	parts := strings.SplitN(cleanPath, string(os.PathSeparator), 2)
+
+	if len(parts) == 0 {
+		return false
+	}
+
+	// Extract room ID from first segment: {username}-{roomID}
+	dirName := parts[0]
+	segments := strings.Split(dirName, "-")
+	if len(segments) < 2 {
+		return false
+	}
+
+	// Room ID should be the last segment after the last dash
+	roomIdStr := segments[len(segments)-1]
+	roomId, err := strconv.Atoi(roomIdStr)
 	if err != nil {
 		return false
 	}
+
 	_, ok := r.recording.Load(roomId)
 	return ok
 }

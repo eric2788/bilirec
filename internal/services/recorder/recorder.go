@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	bili "github.com/CuteReimu/bilibili/v2"
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/modules/config"
 	"github.com/eric2788/bilirec/internal/processors"
@@ -399,11 +398,11 @@ func (r *Service) backgroundMaintenance(ctx context.Context) {
 }
 
 // the time should be the time you start the record, not live start
-func (r *Service) prepareFilePath(info *bili.LiveRoomInfo, start time.Time) (string, error) {
-	dirPath := fmt.Sprintf("%s/%d", r.cfg.OutputDir, info.RoomId)
+func (r *Service) prepareFilePath(info *bilibili.LiveRoomInfoDetail, start time.Time) (string, error) {
+	dirPath := fmt.Sprintf("%s/%s-%d", r.cfg.OutputDir, info.Uname, info.RoomID)
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return "", err
 	}
-	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 15)
+	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 20)
 	return fmt.Sprintf("%s/%s-%s.flv", dirPath, safeTitle, start.Format("20060102_150405")), nil
 }

@@ -32,7 +32,7 @@ func NewController(app *fiber.App, bilic *bilibili.Client) *Controller {
 // @Accept json
 // @Produce json
 // @Param roomID path int true "Room ID"
-// @Success 200 {object} LiveRoomInfo "Room information"
+// @Success 200 {object} bilibili.LiveRoomInfoDetail "Room information"
 // @Failure 400 {string} string "Invalid room ID"
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/{roomID}/info [get]
@@ -53,7 +53,7 @@ func (r *Controller) getRoomInfo(ctx fiber.Ctx) error {
 		)
 	}
 
-	return ctx.JSON(newLiveRoomInfo(res))
+	return ctx.JSON(res)
 }
 
 // @Summary Check if stream is live
