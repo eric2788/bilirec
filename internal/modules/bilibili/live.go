@@ -18,7 +18,7 @@ type (
 	}
 
 	LiveRoomInfoDataField struct {
-		ByRoomIDs map[string]LiveRoomInfoDetail `json:"by_room_ids"`
+		ByRoomIDs map[string]*LiveRoomInfoDetail `json:"by_room_ids"`
 	}
 
 	LiveRoomInfoDetail struct {
@@ -62,7 +62,7 @@ func (c *Client) IsStreamLiving(roomID int) (bool, error) {
 	return info.LiveStatus == 1, nil
 }
 
-func (c *Client) GetLiveRoomInfos(roomIDs ...int) (map[string]LiveRoomInfoDetail, error) {
+func (c *Client) GetLiveRoomInfos(roomIDs ...int) (map[string]*LiveRoomInfoDetail, error) {
 	req := c.liveClient.R()
 	queries := url.Values{}
 	queries.Set("req_biz", "web_room_componet") // hard coded value
@@ -96,7 +96,7 @@ func (c *Client) GetLiveRoomInfo(roomID int) (*LiveRoomInfoDetail, error) {
 	if !ok {
 		return nil, ErrRoomNotFound
 	}
-	return &info, nil
+	return info, nil
 }
 
 func IsErrRoomNotFound(err error) bool {

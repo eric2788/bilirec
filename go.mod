@@ -40,6 +40,7 @@ require (
 	github.com/gofiber/schema v1.6.0 // indirect
 	github.com/gofiber/utils/v2 v2.0.0-rc.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/jellydator/ttlcache/v3 v3.4.0 // indirect
 	github.com/klauspost/compress v1.18.2 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect

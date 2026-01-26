@@ -3,13 +3,13 @@ package convert
 import (
 	"context"
 
-	"go.etcd.io/bbolt"
+	"github.com/eric2788/bilirec/pkg/db"
 )
 
 type GetActiveRecordings func() int
 
 type ConvertManager interface {
-	StartWorker(ctx context.Context, db *bbolt.DB) error
+	StartWorker(ctx context.Context, db *db.Client) error
 	Enqueue(inputPath, outputPath, format string, deleteSource bool) (*TaskQueue, error)
 	Cancel(taskID string) error
 	ListInProgress() ([]*TaskQueue, error)

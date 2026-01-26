@@ -10,6 +10,7 @@ import (
 	"github.com/eric2788/bilirec/internal/modules/config"
 	"github.com/eric2788/bilirec/internal/services/path"
 	"github.com/eric2788/bilirec/pkg/cloudconvert"
+	"github.com/eric2788/bilirec/pkg/db"
 	"github.com/eric2788/bilirec/pkg/ds"
 	"github.com/eric2788/bilirec/pkg/pool"
 	"github.com/eric2788/bilirec/pkg/signeddownload"
@@ -22,7 +23,7 @@ import (
 const cloudConvertBucket = "Queue_CloudConvert"
 
 type cloudConvertManager struct {
-	db         *bbolt.DB
+	bucket     *db.Bucket
 	logger     *logrus.Entry
 	client     *cloudconvert.Client
 	serializer *pool.Serializer
@@ -46,17 +47,15 @@ func newCloudConvertManager(client *cloudconvert.Client, pathSvc *path.Service) 
 	}
 }
 
-func (c *cloudConvertManager) StartWorker(ctx context.Context, db *bbolt.DB) error {
+func (c *cloudConvertManager) StartWorker(ctx context.Context, db *db.Client) error {
 	if c.client == nil {
 		return ErrCloudConvertNotConfigured
 	}
-	if err := db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(cloudConvertBucket))
-		return err
-	}); err != nil {
+	bucket, err := db.Bucket(cloudConvertBucket)
+	if err != nil {
 		return err
 	}
-	c.db = db
+	c.bucket = bucket
 	go c.checkTaskStatusPeriodically(ctx)
 	return nil
 }
@@ -105,20 +104,18 @@ func (c *cloudConvertManager) Enqueue(inputPath, outputPath, format string, dele
 		DeleteSource:  deleteSource,
 	}
 
-	err = c.mutate(func(bucket *bbolt.Bucket) error {
-		data, err := c.serializer.Serialize(queue)
-		if err != nil {
-			return err
-		}
-		return bucket.Put([]byte(queue.TaskID), data)
-	})
+	data, err := c.serializer.Serialize(queue)
+	if err != nil {
+		return nil, err
+	}
 
+	err = c.bucket.Put([]byte(queue.TaskID), data)
 	return queue, err
 }
 
 func (c *cloudConvertManager) Cancel(taskID string) error {
 	var convertTaskID string
-	if err := c.read(func(bucket *bbolt.Bucket) error {
+	if err := c.bucket.View(func(bucket *bbolt.Bucket) error {
 		v := bucket.Get([]byte(taskID))
 		if v == nil {
 			return ErrTaskNotFound
@@ -135,22 +132,18 @@ func (c *cloudConvertManager) Cancel(taskID string) error {
 	if err := c.client.CancelTask(utils.EmptyOrElse(convertTaskID, taskID)); err != nil {
 		return err
 	}
-	return c.mutate(func(bucket *bbolt.Bucket) error {
-		return bucket.Delete([]byte(taskID))
-	})
+	return c.bucket.Delete([]byte(taskID))
 }
 
 func (c *cloudConvertManager) ListInProgress() ([]*TaskQueue, error) {
 	var queues []*TaskQueue
-	err := c.read(func(bucket *bbolt.Bucket) error {
-		return bucket.ForEach(func(k, v []byte) error {
-			var queue TaskQueue
-			if err := c.serializer.Deserialize(v, &queue); err != nil {
-				return fmt.Errorf("deserialize task %s: %w", string(k), err)
-			}
-			queues = append(queues, &queue)
-			return nil
-		})
+	err := c.bucket.ForEach(func(k, v []byte) error {
+		var queue TaskQueue
+		if err := c.serializer.Deserialize(v, &queue); err != nil {
+			return fmt.Errorf("deserialize task %s: %w", string(k), err)
+		}
+		queues = append(queues, &queue)
+		return nil
 	})
 	return queues, err
 }
@@ -224,7 +217,7 @@ func (c *cloudConvertManager) onFinished(ctx context.Context, queue *TaskQueue, 
 			}
 		}
 		if download == nil {
-			logger.Debug("no matched filename or format, fallback to first file")
+			c.logger.Debug("no matched filename or format, fallback to first file")
 			download = &data.Result.Files[0]
 		}
 	}
@@ -240,9 +233,7 @@ func (c *cloudConvertManager) onFinished(ctx context.Context, queue *TaskQueue, 
 	c.logger.Infof("successfully downloaded exported file for task %s to %s", queue.TaskID, queue.OutputPath)
 
 	err := utils.WithRetry(3, c.logger, "delete bucket", func() error {
-		return c.mutate(func(bucket *bbolt.Bucket) error {
-			return bucket.Delete([]byte(queue.TaskID))
-		})
+		return c.bucket.Delete([]byte(queue.TaskID))
 	})
 	if err != nil {
 		return err
@@ -266,9 +257,7 @@ func (c *cloudConvertManager) onFailed(queue *TaskQueue, info *cloudconvert.Task
 
 	deleteBucket := func() error {
 		return utils.WithRetry(3, c.logger, "delete bucket", func() error {
-			return c.mutate(func(bucket *bbolt.Bucket) error {
-				return bucket.Delete([]byte(queue.TaskID))
-			})
+			return c.bucket.Delete([]byte(queue.TaskID))
 		})
 	}
 
@@ -321,24 +310,4 @@ func (c *cloudConvertManager) downloadExportedFile(ctx context.Context, url, out
 
 	writer := pool.NewFileStreamWriter(ctx, c.downloadPool)
 	return writer.WriteToFile(rc, outPath, config.ReadOnly.DownloadWriterBufferSize())
-}
-
-func (c *cloudConvertManager) mutate(fn func(bucket *bbolt.Bucket) error) error {
-	return c.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(cloudConvertBucket))
-		if bucket == nil {
-			return fmt.Errorf("bucket %q not found", cloudConvertBucket)
-		}
-		return fn(bucket)
-	})
-}
-
-func (c *cloudConvertManager) read(fn func(bucket *bbolt.Bucket) error) error {
-	return c.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(cloudConvertBucket))
-		if bucket == nil {
-			return fmt.Errorf("bucket %q not found", cloudConvertBucket)
-		}
-		return fn(bucket)
-	})
 }

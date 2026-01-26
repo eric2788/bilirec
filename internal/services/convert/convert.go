@@ -9,9 +9,9 @@ import (
 	"github.com/eric2788/bilirec/internal/modules/config"
 	"github.com/eric2788/bilirec/internal/services/path"
 	"github.com/eric2788/bilirec/pkg/cloudconvert"
+	"github.com/eric2788/bilirec/pkg/db"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/sirupsen/logrus"
-	"go.etcd.io/bbolt"
 	"go.uber.org/fx"
 )
 
@@ -28,7 +28,7 @@ type Service struct {
 	cloudthreshold int64
 	managers       map[string]ConvertManager
 	ctx            context.Context
-	db             *bbolt.DB
+	db             *db.Client
 }
 
 func NewService(ls fx.Lifecycle, cfg *config.Config, pathSvc *path.Service) *Service {
@@ -59,11 +59,7 @@ func NewService(ls fx.Lifecycle, cfg *config.Config, pathSvc *path.Service) *Ser
 				return err
 			}
 			// use bbolt for offline storage
-			db, err := bbolt.Open(cfg.DatabaseDir+string(os.PathSeparator)+"queues.db", 0600, &bbolt.Options{
-				PageSize:     16 * 1024,
-				NoGrowSync:   true,
-				FreelistType: bbolt.FreelistArrayType,
-			})
+			db, err := db.Open(cfg.DatabaseDir + string(os.PathSeparator) + "queues.db")
 			if err != nil {
 				return err
 			}
@@ -100,7 +96,6 @@ func (s *Service) Enqueue(path, format string, deleteSource bool) (*TaskQueue, e
 	}
 	return manager.Enqueue(path, outputFormat, format, deleteSource)
 }
-
 
 // IsInQueue checks if the given full path is already in the convert queue.
 // It must be full path

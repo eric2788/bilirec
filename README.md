@@ -234,7 +234,66 @@ Content-Type: application/json
 
 #### 房间信息
 
-参考 [`internal/controllers/room/room.go`](internal/controllers/room/room.go) 获取更多房间相关接口。
+- **获取房间信息**
+  ```
+  GET /room/:roomID/info
+  ```
+  获取指定房间的详细信息。
+
+- **批量获取房间信息**
+  ```
+  GET /room/infos?roomIDs=123,456,789
+  ```
+  通过逗号分隔的房间 ID 列表获取多个房间的信息。
+
+- **检查直播状态**
+  ```
+  GET /room/:roomID/live
+  ```
+  检查指定房间的直播是否进行中。
+
+#### 房间订阅管理
+
+- **订阅房间**
+  ```
+  POST /room/:roomID
+  ```
+  订阅一个直播房间，当房间开播时会接收更新。
+  - 状态 `200`: 订阅成功
+  - 状态 `409`: 已订阅此房间
+  - 状态 `400`: 无效的房间 ID
+
+- **取消订阅**
+  ```
+  DELETE /room/:roomID
+  ```
+  取消订阅直播房间。
+  - 状态 `200`: 取消订阅成功
+  - 状态 `404`: 未订阅此房间
+  - 状态 `400`: 无效的房间 ID
+
+- **检查订阅状态**
+  ```
+  GET /room/subscribe/:roomID
+  ```
+  检查是否已订阅指定房间。返回：
+  ```json
+  {
+    "room_id": 123,
+    "is_subscribed": true
+  }
+  ```
+
+- **列出所有订阅房间**
+  ```
+  GET /room/subscribe
+  ```
+  获取所有已订阅房间的 ID 列表。返回：
+  ```json
+  {
+    "room_ids": [123, 456, 789]
+  }
+  ```
 
 ## 开发与调试
 
@@ -246,33 +305,41 @@ Content-Type: application/json
 
 ```
 .
-├── .github/                          # CI / workflows (maintenance)
-├── Dockerfile                        # Docker 镜像构建文件
-├── internal/
+├── .github/                          # CI / workflows
+├── Dockerfile
+├── go.mod
+├── LICENSE
+├── README.md
+├── main.go
+├── main_test.go
+├── internal/                         # 内部包（不对外暴露）
 │   ├── controllers/                  # HTTP 控制器
-│   │   ├── convert/                  # 转换任务管理（/convert）
+│   │   ├── convert/                  # 转换任务管理
 │   │   ├── file/                     # 文件管理
 │   │   ├── record/                   # 录制管理
-│   │   └── room/                     # 房间信息
+│   │   └── room/                     # 房间信息与订阅
 │   ├── modules/                      # 核心模块
-│   │   ├── bilibili/                 # Bilibili API 封装
+│   │   ├── bilibili/                 # Bilibili API 封装与认证
 │   │   ├── config/                   # 配置管理
-│   │   └── rest/                     # REST 服务（包含 Swagger / pprof）
-│   └── services/                     # 业务逻辑
-│       ├── convert/                  # 转换服务（本地 ffmpeg 或 CloudConvert）
-│       ├── file/                     # 文件服务
-│       ├── recorder/                 # 录制服务
-│       └── stream/                   # 流处理服务
-├── pkg/                              # 底层库与工具
-│   ├── cloudconvert/                 # CloudConvert client wrapper (optional)
-│   ├── ds/                           # 数据结构（如 FLV Tag）
-│   ├── flv/                          # FLV 读写与处理
-│   ├── pipeline/                     # 流处理管道  
-|   ├── monitor/                      # 监控与指标
-│   └── pool/                         # 内存池
-├── utils/                            # 工具函数
-├── LICENSE
-└── README.md
+│   │   └── rest/                     # REST 服务
+│   ├── processors/                   # 流处理器
+│   └── services/                     # 业务逻辑服务
+│       ├── convert/                  # 转换服务
+│       ├── file/                     # 文件操作
+│       ├── path/                     # 路径管理
+│       ├── recorder/                 # 直播录制
+│       ├── room/                     # 房间信息与订阅
+│       └── stream/                   # 流处理
+├── pkg/                              # 可复用库与工具
+│   ├── cloudconvert/                 # CloudConvert API 客户端
+│   ├── db/                           # 数据库抽象层
+│   ├── ds/                           # 数据结构
+│   ├── flv/                          # FLV 格式处理
+│   ├── monitor/                      # 监控与统计
+│   ├── pipeline/                     # 流处理管道
+│   ├── pool/                         # 内存池
+│   └── signeddownload/               # 预签名下载
+└── utils/                            # 工具函数库
 ```
 
 ## 核心实现

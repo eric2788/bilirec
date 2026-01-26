@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/eric2788/bilirec/pkg/db"
 	"github.com/eric2788/bilirec/pkg/pool"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/puzpuzpuz/xsync/v4"
@@ -17,7 +18,7 @@ import (
 const ffmpegBucket = "Queue_FFmpeg"
 
 type ffmpegConvertManager struct {
-	db         *bbolt.DB
+	bucket     *db.Bucket
 	logger     *logrus.Entry
 	serializer *pool.Serializer
 	getActives GetActiveRecordings
@@ -34,16 +35,14 @@ func newFFmpegConvertManager(getActives GetActiveRecordings) ConvertManager {
 	}
 }
 
-func (f *ffmpegConvertManager) StartWorker(ctx context.Context, db *bbolt.DB) error {
+func (f *ffmpegConvertManager) StartWorker(ctx context.Context, db *db.Client) error {
 	if !utils.FFmpegAvailable() {
 		return ErrCloudConvertNotConfigured
-	} else if err := db.Update(func(tx *bbolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(ffmpegBucket))
+	} else if bucket, err := db.Bucket(ffmpegBucket); err != nil {
 		return err
-	}); err != nil {
-		return err
+	} else {
+		f.bucket = bucket
 	}
-	f.db = db
 	go f.runTaskPeriodically(ctx)
 	return nil
 }
@@ -61,13 +60,11 @@ func (f *ffmpegConvertManager) Enqueue(inputPath, outputPath, format string, del
 		OutputFormat: format,
 		DeleteSource: deleteSource,
 	}
-	err = f.mutate(func(bucket *bbolt.Bucket) error {
-		data, err := f.serializer.Serialize(queue)
-		if err != nil {
-			return err
-		}
-		return bucket.Put([]byte(uuid), data)
-	})
+	data, err := f.serializer.Serialize(queue)
+	if err != nil {
+		return nil, err
+	}
+	err = f.bucket.Put([]byte(uuid), data)
 	return queue, err
 }
 
@@ -75,25 +72,18 @@ func (f *ffmpegConvertManager) Cancel(taskID string) error {
 	if cancel, ok := f.processing.LoadAndDelete(taskID); ok {
 		cancel()
 	}
-	return f.mutate(func(bucket *bbolt.Bucket) error {
-		if bucket.Get([]byte(taskID)) == nil {
-			return ErrTaskNotFound
-		}
-		return bucket.Delete([]byte(taskID))
-	})
+	return f.bucket.Delete([]byte(taskID))
 }
 
 func (f *ffmpegConvertManager) ListInProgress() ([]*TaskQueue, error) {
 	var queues []*TaskQueue
-	err := f.read(func(bucket *bbolt.Bucket) error {
-		return bucket.ForEach(func(k, v []byte) error {
-			var queue TaskQueue
-			if err := f.serializer.Deserialize(v, &queue); err != nil {
-				return fmt.Errorf("deserialize task %s: %w", string(k), err)
-			}
-			queues = append(queues, &queue)
-			return nil
-		})
+	err := f.bucket.ForEach(func(k, v []byte) error {
+		var queue TaskQueue
+		if err := f.serializer.Deserialize(v, &queue); err != nil {
+			return fmt.Errorf("deserialize task %s: %w", string(k), err)
+		}
+		queues = append(queues, &queue)
+		return nil
 	})
 	return queues, err
 }
@@ -110,7 +100,7 @@ func (f *ffmpegConvertManager) runTaskPeriodically(ctx context.Context) {
 				continue
 			}
 			var queue *TaskQueue
-			if err := f.read(func(bucket *bbolt.Bucket) error {
+			if err := f.bucket.View(func(bucket *bbolt.Bucket) error {
 				k, v := bucket.Cursor().First()
 				if k == nil {
 					return nil
@@ -129,9 +119,7 @@ func (f *ffmpegConvertManager) runTaskPeriodically(ctx context.Context) {
 
 			deleteBucket := func() error {
 				return utils.WithRetry(3, f.logger, "delete bucket", func() error {
-					return f.mutate(func(bucket *bbolt.Bucket) error {
-						return bucket.Delete([]byte(queue.TaskID))
-					})
+					return f.bucket.Delete([]byte(queue.TaskID))
 				})
 			}
 
@@ -204,25 +192,5 @@ func (f *ffmpegConvertManager) processTask(ctx context.Context, queue *TaskQueue
 			return nil
 		}
 		return os.Remove(queue.InputPath)
-	})
-}
-
-func (f *ffmpegConvertManager) mutate(fn func(bucket *bbolt.Bucket) error) error {
-	return f.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(ffmpegBucket))
-		if bucket == nil {
-			return fmt.Errorf("bucket %q not found", ffmpegBucket)
-		}
-		return fn(bucket)
-	})
-}
-
-func (f *ffmpegConvertManager) read(fn func(bucket *bbolt.Bucket) error) error {
-	return f.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket([]byte(ffmpegBucket))
-		if bucket == nil {
-			return fmt.Errorf("bucket %q not found", ffmpegBucket)
-		}
-		return fn(bucket)
 	})
 }

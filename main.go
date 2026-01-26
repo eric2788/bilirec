@@ -11,11 +11,12 @@ import (
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/modules/config"
 	"github.com/eric2788/bilirec/internal/modules/rest"
-	c "github.com/eric2788/bilirec/internal/services/convert"
-	f "github.com/eric2788/bilirec/internal/services/file"
-	"github.com/eric2788/bilirec/internal/services/path"
-	"github.com/eric2788/bilirec/internal/services/recorder"
-	"github.com/eric2788/bilirec/internal/services/stream"
+	co "github.com/eric2788/bilirec/internal/services/convert"
+	fi "github.com/eric2788/bilirec/internal/services/file"
+	pa "github.com/eric2788/bilirec/internal/services/path"
+	re "github.com/eric2788/bilirec/internal/services/recorder"
+	ro "github.com/eric2788/bilirec/internal/services/room"
+	st "github.com/eric2788/bilirec/internal/services/stream"
 	"github.com/eric2788/bilirec/utils"
 	"go.uber.org/fx"
 )
@@ -27,11 +28,12 @@ func main() {
 		bilibili.Module,
 		rest.Module,
 
-		fx.Provide(path.NewService),
-		fx.Provide(c.NewService),
-		fx.Provide(stream.NewService),
-		fx.Provide(recorder.NewService),
-		fx.Provide(f.NewService),
+		fx.Provide(pa.NewService),
+		fx.Provide(co.NewService),
+		fx.Provide(st.NewService),
+		fx.Provide(re.NewService),
+		fx.Provide(ro.NewService),
+		fx.Provide(fi.NewService),
 
 		fx.Invoke(room.NewController),
 		fx.Invoke(record.NewController),
