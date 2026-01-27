@@ -142,6 +142,7 @@ func (r *Controller) isStreamLiving(ctx fiber.Ctx) error {
 // @Param roomID path int true "Room ID"
 // @Success 200 {string} string "Subscription successful"
 // @Failure 400 {string} string "Invalid room ID"
+// @Failure 404 {string} string "Room not found"
 // @Failure 409 {string} string "Already subscribed"
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/{roomID} [post]
@@ -154,11 +155,14 @@ func (r *Controller) subscribeRoom(ctx fiber.Ctx) error {
 	err = r.roomSvc.Subscribe(roomId)
 	if err != nil {
 		logger.Errorf("error subscribing to room %d: %v", roomId, err)
-		return utils.Ternary(
-			room.ErrRoomAlreadySubscribed == err,
-			fiber.NewError(fiber.StatusConflict, "已訂閱此房間"),
-			fiber.ErrInternalServerError,
-		)
+		switch {
+		case room.ErrRoomAlreadySubscribed == err:
+			return fiber.NewError(fiber.StatusConflict, "已訂閱此房間")
+		case bilibili.IsErrRoomNotFound(err):
+			return fiber.NewError(fiber.StatusNotFound, "房間不存在")
+		default:
+			return fiber.ErrInternalServerError
+		}
 	}
 	return ctx.SendStatus(fiber.StatusOK)
 }
