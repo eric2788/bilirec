@@ -7,15 +7,23 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 )
 
-// add some caching
+var roomtNotFoundMarker = &bilibili.LiveRoomInfoDetail{}
 
 func (r *Service) GetLiveRoomInfo(roomID int) (*bilibili.LiveRoomInfoDetail, error) {
 	data := r.cache.Get(fmt.Sprint(roomID))
 	if data != nil {
-		return data.Value(), nil
+		info := data.Value()
+		if info == roomtNotFoundMarker {
+			return nil, bilibili.ErrRoomNotFound
+		} else {
+			return info, nil
+		}
 	}
 	info, err := r.bilic.GetLiveRoomInfo(roomID)
 	if err != nil {
+		if bilibili.IsErrRoomNotFound(err) {
+			r.cache.Set(fmt.Sprint(roomID), roomtNotFoundMarker, ttlcache.DefaultTTL)
+		}
 		return nil, err
 	}
 	r.cache.Set(fmt.Sprint(roomID), info, ttlcache.DefaultTTL)
@@ -38,7 +46,13 @@ func (r *Service) GetMultipleRoomInfos(roomIDs ...int) (map[string]*bilibili.Liv
 	for _, id := range roomIDs {
 		idStr := fmt.Sprint(id)
 		if data := r.cache.Get(idStr); data != nil {
-			infos[idStr] = data.Value()
+			info := data.Value()
+			if info != roomtNotFoundMarker {
+				infos[idStr] = info
+			} else {
+				// earily return if any room not found
+				return nil, bilibili.ErrRoomNotFound
+			}
 		} else {
 			missedIDs = append(missedIDs, id)
 		}
@@ -48,6 +62,7 @@ func (r *Service) GetMultipleRoomInfos(roomIDs ...int) (map[string]*bilibili.Liv
 	if len(missedIDs) > 0 {
 		fetchedInfos, err := r.bilic.GetLiveRoomInfos(missedIDs...)
 		if err != nil {
+			// no caching since we don't know which one failed
 			return nil, err
 		}
 
