@@ -41,6 +41,7 @@ func main() {
 		fx.Invoke(convert.NewController),
 
 		fx.StartTimeout(utils.Ternary(os.Getenv("ANONYMOUS_LOGIN") == "true", 15*time.Second, 1*time.Minute)),
+		fx.StopTimeout(1*time.Minute),
 	)
 
 	app.Run()
