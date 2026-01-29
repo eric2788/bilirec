@@ -112,6 +112,10 @@ func (r *Service) Start(roomId int) error {
 	roomInfo, err := r.bilic.GetLiveRoomInfo(roomId)
 	if err != nil {
 		return err
+	} else if roomInfo.IsEncrypted {
+		return ErrRoomEncrypted
+	} else if roomInfo.LockStatus != 0 {
+		return ErrRoomLocked
 	} else if roomInfo.LiveStatus != 1 {
 		return ErrStreamNotLive
 	}
@@ -295,7 +299,7 @@ func (r *Service) recover(roomId int) {
 			l.Infof("stop recovery due to: %v", err)
 			r.Stop(roomId)
 			return
-		case ErrStreamNotLive:
+		case ErrStreamNotLive, ErrRoomEncrypted, ErrRoomLocked:
 			l.Infof("stream is offline, will not recover.")
 			r.Stop(roomId)
 			return
