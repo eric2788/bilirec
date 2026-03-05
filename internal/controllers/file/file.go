@@ -41,6 +41,7 @@ func NewController(
 	files.Get("/browse/*", fc.listFiles)
 	files.Get("/download/*", fc.downloadFile)
 	files.Get("/tempdownload", fc.presignedDownload)
+	files.Get("/disk-space", fc.getDiskSpace)
 	files.Post("/presigned/*", fc.createPresignedURL)
 
 	files.Delete("/batch", fc.deleteFiles)
@@ -188,6 +189,24 @@ func (c *Controller) createPresignedURL(ctx fiber.Ctx) error {
 		ExpiresIn: int(ttl.Seconds()),
 	}
 	return ctx.Status(fiber.StatusCreated).JSON(resp)
+}
+
+// @Summary Get disk space
+// @Description Get disk space usage information for the output directory
+// @Tags files
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} file.DiskSpace "Disk space information"
+// @Failure 500 {string} string "Internal server error"
+// @Router /files/disk-space [get]
+func (c *Controller) getDiskSpace(ctx fiber.Ctx) error {
+	space, err := c.fileSvc.GetDiskSpace()
+	if err != nil {
+		logger.Warnf("error getting disk space: %v", err)
+		return fiber.ErrInternalServerError
+	}
+	return ctx.JSON(space)
 }
 
 // @Summary Delete multiple files
