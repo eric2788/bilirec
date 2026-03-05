@@ -21,9 +21,8 @@ import (
 	"go.uber.org/fx"
 )
 
-func main() {
-
-	app := fx.New(
+func MainModule() fx.Option {
+	return fx.Module("main",
 		config.Module,
 		bilibili.Module,
 		rest.Module,
@@ -39,7 +38,13 @@ func main() {
 		fx.Invoke(record.NewController),
 		fx.Invoke(file.NewController),
 		fx.Invoke(convert.NewController),
+	)
+}
 
+func main() {
+
+	app := fx.New(
+		MainModule(),
 		fx.StartTimeout(utils.Ternary(os.Getenv("ANONYMOUS_LOGIN") == "true", 15*time.Second, 1*time.Minute)),
 		fx.StopTimeout(1*time.Minute),
 	)

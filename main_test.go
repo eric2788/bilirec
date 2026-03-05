@@ -5,22 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eric2788/bilirec/internal/controllers/room"
-	"github.com/eric2788/bilirec/internal/modules/bilibili"
-	"github.com/eric2788/bilirec/internal/modules/config"
-	"github.com/eric2788/bilirec/internal/modules/rest"
-	"go.uber.org/fx"
+	main "github.com/eric2788/bilirec"
 	"go.uber.org/fx/fxtest"
 )
 
 func TestAppLaunch(t *testing.T) {
-	app := fxtest.New(t,
-		config.Module,
-		bilibili.Module,
-		rest.Module,
-
-		fx.Invoke(room.NewController),
-	)
+	app := fxtest.New(t, main.MainModule())
 	app.RequireStart()
 	defer app.RequireStop()
 	<-time.After(10 * time.Second)
@@ -28,7 +18,5 @@ func TestAppLaunch(t *testing.T) {
 }
 
 func init() {
-	if os.Getenv("CI") != "" {
-		os.Setenv("ANONYMOUS_LOGIN", "true")
-	}
+	os.Setenv("ANONYMOUS_LOGIN", "true")
 }
