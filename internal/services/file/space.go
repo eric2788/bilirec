@@ -1,9 +1,7 @@
 package file
 
 import (
-	"path/filepath"
-
-	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/eric2788/bilirec/utils"
 )
 
 type DiskSpace struct {
@@ -14,14 +12,7 @@ type DiskSpace struct {
 
 // GetDiskSpace returns disk usage information for the output directory
 func (s *Service) GetDiskSpace() (*DiskSpace, error) {
-	// Get the absolute path of the output directory
-	fullPath, err := filepath.Abs(s.cfg.OutputDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get disk usage statistics for the path
-	usage, err := disk.Usage(fullPath)
+	usage, err := utils.GetDiskSpace(s.cfg.OutputDir)
 	if err != nil {
 		return nil, err
 	}

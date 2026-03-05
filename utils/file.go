@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/shirou/gopsutil/v4/disk"
 )
 
 // Helper to remove invalid filename characters
@@ -47,4 +49,16 @@ func FFmpegAvailable() bool {
 		return false
 	}
 	return true
+}
+
+// GetDiskSpace returns disk usage information for the given path
+func GetDiskSpace(outputDir string) (*disk.UsageStat, error) {
+	// Get the absolute path of the output directory
+	fullPath, err := filepath.Abs(outputDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get disk usage statistics for the path
+	return disk.Usage(fullPath)
 }

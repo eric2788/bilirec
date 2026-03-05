@@ -43,6 +43,7 @@ var ErrEmptyStreamURLs = errors.New("no stream urls available")
 var ErrStreamURLsUnreachable = errors.New("all stream urls are unreachable")
 var ErrRoomLocked = errors.New("the room is locked")
 var ErrRoomEncrypted = errors.New("the room is encrypted")
+var ErrInsufficientDiskSpace = errors.New("insufficient disk space")
 
 type Recorder struct {
 	status     atomic.Pointer[RecordStatus]
@@ -107,6 +108,14 @@ func (r *Service) Start(roomId int) error {
 		} else if status := existing.status.Load(); status != recoveringPtr { // not recovering
 			return ErrMaxConcurrentRecordingsReached
 		}
+	}
+
+	// Check disk space - require at least configured minimum free space
+	diskSpace, err := utils.GetDiskSpace(r.cfg.OutputDir)
+	if err != nil {
+		l.Warnf("cannot check disk space: %v", err)
+	} else if diskSpace.Free < uint64(r.cfg.MinDiskSpaceBytes) {
+		return ErrInsufficientDiskSpace
 	}
 
 	roomInfo, err := r.bilic.GetLiveRoomInfo(roomId)

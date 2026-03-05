@@ -61,6 +61,8 @@ func (r *Controller) startRecording(ctx fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusBadRequest, "此房間已經正在錄製中")
 		case recorder.ErrMaxConcurrentRecordingsReached:
 			return fiber.NewError(fiber.StatusTooManyRequests, "已達到最大同時錄製數")
+		case recorder.ErrInsufficientDiskSpace:
+			return fiber.NewError(fiber.StatusInsufficientStorage, "磁碟空間低於設定值")
 		default:
 			return fiber.ErrInternalServerError
 		}

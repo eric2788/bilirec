@@ -37,6 +37,8 @@ type Config struct {
 	Debug          bool
 	ProductionMode bool
 
+	MinDiskSpaceBytes int64
+
 	// configurable global performances
 	uploadBufferSize           int
 	downloadBufferSize         int
@@ -99,6 +101,7 @@ func provider() (*Config, error) {
 		JwtSecret:               utils.EmptyOrElse(os.Getenv("JWT_SECRET"), "bilirec_secret"),
 		Debug:                   debug,
 		ProductionMode:          os.Getenv("PRODUCTION_MODE") == "true",
+		MinDiskSpaceBytes:       utils.MustAtoi64(utils.EmptyOrElse(os.Getenv("MIN_DISK_SPACE_BYTES"), "5368709120")), // 5GB
 
 		// global performance configs
 		uploadBufferSize:           utils.MustAtoi(utils.EmptyOrElse(os.Getenv("UPLOAD_BUFFER_SIZE"), "5242880")),             // default 5MB
