@@ -82,6 +82,7 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 			cfg.ProductionMode,
 			[]string{cfg.FrontendURL.String()},
 			[]string{
+				cfg.FrontendURL.String(),
 				"http://localhost:3000",
 				"http://127.0.0.1:3000",
 			},
