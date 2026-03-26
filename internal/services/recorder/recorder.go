@@ -90,6 +90,8 @@ func NewService(
 	cv.SetActiveRecordingsGetter(s.recording.Size)
 
 	go s.backgroundMaintenance(ctx)
+	go initOutputDir(cfg)
+	
 	lc.Append(fx.StopHook(cancel))
 	return s
 }
@@ -421,4 +423,11 @@ func (r *Service) prepareFilePath(info *bilibili.LiveRoomInfoDetail, start time.
 	}
 	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 20)
 	return fmt.Sprintf("%s/%s-%s.flv", dirPath, safeTitle, start.Format("20060102_150405")), nil
+}
+
+
+func initOutputDir(cfg *config.Config) {
+	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {
+		logger.Fatalf("cannot create output directory %s: %v", cfg.OutputDir, err)
+	}
 }
