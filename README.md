@@ -15,6 +15,25 @@
 
 ## 安装
 
+### 使用二进制文件
+
+可以从 [GitHub Releases](https://github.com/eric2788/bilirec/releases) 页面下载预编译的二进制文件，选择适合你系统的版本:
+
+- `bilirec-amd64`：适用于 x86_64 架构的 Linux 系统
+- `bilirec-arm64`：适用于 ARM64 架构的 Linux 系统
+- `bilirec-windows`：适用于 Windows 系统（包含 .exe 后缀）
+
+启动服务：
+
+```bash
+# 如果你下载了 amd64 版本
+./bilirec-amd64
+# 或者如果你下载了 arm64 版本
+./bilirec-arm64
+```
+
+如果你是 Windows 用户，直接双击 `bilirec-windows.exe` 启动服务。
+
 ### 使用 Docker
 
 可以通过构建镜像或直接运行容器来启动 Bilirec。
@@ -44,14 +63,6 @@ docker run -d \
 ```bash
 docker pull ghcr.io/eric2788/bilirec:latest
 docker run -d --name bilirec -p 8080:8080 ghcr.io/eric2788/bilirec:latest
-```
-
-### 从源码构建
-
-```bash
-git clone <repository-url>
-cd bilirec
-go build -o bilirec main.go
 ```
 
 ## 配置
@@ -114,15 +125,23 @@ export PASSWORD=changeme
 export PRODUCTION_MODE=false
 ```
 
+如果你是使用二进制文件，启动服务后会生成 `.env` 文件，里面包含当前的环境变量配置（不包含敏感信息）。你可以编辑这个文件来修改配置，或者直接设置环境变量覆盖。
+
 ## 使用方法
 
 ### 启动服务
 
-```bash
-./bilirec
-```
+请参阅上面的安装和配置部分，设置好环境变量后启动服务。
 
 首次启动如果未使用匿名登录，会显示二维码，使用 Bilibili 手机 APP 扫码登录。
+
+### Web 页面
+
+1. 设置你的 `FRONTEND_URL` 为 `https://bilirec.ericlamm.com/`
+
+2. 直接访问 `https://bilirec.ericlamm.com/` 进入登入界面
+
+3. 根据你所设置的 `USERNAME` 和 `PASSWORD` 进行登录（如果未设置则直接进入）
 
 ### API 接口
 
