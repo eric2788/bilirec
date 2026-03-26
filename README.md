@@ -317,8 +317,8 @@ Content-Type: application/json
 ## 开发与调试
 
 - **启用调试**：设置环境变量 `DEBUG=true` 启用调试模式，服务器启动时会在日志中打印一个临时十六进制令牌（hex token）。
-- **pprof 性能分析**：调试模式下会在 `/debug/pprof` 挂载 pprof 以便性能分析。该路由受保护：可以在请求头 `Authorization` 中填入启动日志中显示的 hex 令牌来访问，或使用已配置的 `USERNAME` / `PASSWORD` 进行 Basic Auth 登录（若已设置）。
-- **实现参考**：该逻辑位于 `internal/modules/rest/rest.go` 中（`DEBUG` 控制是否启用，令牌或用户名/密码用于授权访问）。
+- **pprof 性能分析**：调试模式下会在 `/debug/pprof` 挂载 pprof 以便性能分析。该路由受保护：可以在请求头 `Authorization` 中填入启动日志中显示的 hex 令牌来访问。
+- **实现参考**：该逻辑位于 `internal/modules/rest/rest.go` 中（`DEBUG` 控制是否启用，令牌授权访问）。
 
 ## 项目结构
 
@@ -330,6 +330,8 @@ Content-Type: application/json
 ├── LICENSE
 ├── README.md
 ├── main.go
+├── swagger.go
+├── dotenv.go
 ├── main_test.go
 ├── internal/                         # 内部包（不对外暴露）
 │   ├── controllers/                  # HTTP 控制器
