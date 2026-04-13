@@ -337,7 +337,7 @@ func (r *Service) rotateSegment(roomId int, info *Recorder, ctx context.Context,
 	*pipe = nextPipe
 
 	oldPipe.Close()
-	go r.finalize(roomId, &Recorder{outputPath: oldPath})
+	go r.finalizeOutputPath(roomId, oldPath)
 	return nil
 }
 
@@ -434,8 +434,10 @@ func (r *Service) finalize(roomId int, info *Recorder) {
 		logger.Warnf("skipping finalize for room %d: no recording info", roomId)
 		return
 	}
+	r.finalizeOutputPath(roomId, info.GetOutputPath())
+}
 
-	outputPath := info.GetOutputPath()
+func (r *Service) finalizeOutputPath(roomId int, outputPath string) {
 	defer r.writtingFiles.Remove(filepath.Base(outputPath))
 
 	fileInfo, err := os.Stat(outputPath)
