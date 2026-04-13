@@ -2,6 +2,7 @@
 **/records/*
 **/database/*
 **/docs/*
+**/java-upgrade/*
 
 *.tmp
 *.zip
