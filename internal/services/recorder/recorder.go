@@ -33,6 +33,7 @@ type RecordStatus string
 const Recording RecordStatus = "recording"
 const Recovering RecordStatus = "recovering"
 const Idle RecordStatus = "idle"
+const maxSegmentNameCollisionAttempts = 1000
 
 // var idlePtr *RecordStatus = utils.Ptr(Idle)
 var recordingPtr *RecordStatus = utils.Ptr(Recording)
@@ -308,7 +309,7 @@ func (r *Service) nextSegmentOutputPath(currentPath string, now time.Time) strin
 		}
 	}
 
-	for suffix := 1; suffix <= 1000; suffix++ {
+	for suffix := 1; suffix <= maxSegmentNameCollisionAttempts; suffix++ {
 		candidate = filepath.Join(dir, fmt.Sprintf("%s-%s-%d%s", prefix, timestamp, suffix, ext))
 		if r.writtingFiles.Contains(filepath.Base(candidate)) {
 			continue
@@ -318,7 +319,9 @@ func (r *Service) nextSegmentOutputPath(currentPath string, now time.Time) strin
 		}
 	}
 
-	return filepath.Join(dir, fmt.Sprintf("%s-%d%s", prefix, now.UnixNano(), ext))
+	fallbackPath := filepath.Join(dir, fmt.Sprintf("%s-%d%s", prefix, now.UnixNano(), ext))
+	logger.Warnf("segment filename collision attempts exceeded (%d), using fallback path: %s", maxSegmentNameCollisionAttempts, fallbackPath)
+	return fallbackPath
 }
 
 func (r *Service) rotateSegment(roomId int, info *Recorder, ctx context.Context, pipe **pipeline.Pipe[[]byte]) error {
