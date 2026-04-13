@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -46,12 +48,26 @@ var ErrRoomEncrypted = errors.New("the room is encrypted")
 var ErrInsufficientDiskSpace = errors.New("insufficient disk space")
 
 type Recorder struct {
-	status     atomic.Pointer[RecordStatus]
-	bytesRead  atomic.Uint64
-	startTime  time.Time
-	outputPath string
+	status       atomic.Pointer[RecordStatus]
+	bytesRead    atomic.Uint64
+	segmentBytes atomic.Uint64
+	startTime    time.Time
+	outputPath   string
+	mu           sync.RWMutex
 
 	cancel context.CancelFunc
+}
+
+func (r *Recorder) GetOutputPath() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.outputPath
+}
+
+func (r *Recorder) SetOutputPath(path string) {
+	r.mu.Lock()
+	r.outputPath = path
+	r.mu.Unlock()
 }
 
 type Service struct {
@@ -91,7 +107,7 @@ func NewService(
 
 	go s.backgroundMaintenance(ctx)
 	go initOutputDir(cfg)
-	
+
 	lc.Append(fx.StopHook(cancel))
 	return s
 }
@@ -197,40 +213,50 @@ func (r *Service) Stop(roomId int) bool {
 
 func (r *Service) prepare(roomId int, ch <-chan []byte, ctx context.Context, info *Recorder) error {
 
+	pipe, err := r.newPipe(info.GetOutputPath(), ctx)
+	if err != nil {
+		return err
+	}
+
+	r.recording.Store(roomId, info)
+	r.pipes.Store(roomId, pipe)
+
+	go r.rev(roomId, ch, ctx, info, pipe)
+	go r.checkRecordingDurationPeriodically(roomId, ctx)
+	return nil
+}
+
+func (r *Service) newPipe(outputPath string, ctx context.Context) (*pipeline.Pipe[[]byte], error) {
 	pipe := pipeline.New(
 		// fix FLV stream
 		processors.NewFlvStreamFixer(),
 		// write to file with buffered writer
 		// flushes every 5 seconds then writes to disk
-		processors.NewBufferedStreamWriter(info.outputPath, config.ReadOnly.LiveStreamWriterBufferSize()),
+		processors.NewBufferedStreamWriter(outputPath, config.ReadOnly.LiveStreamWriterBufferSize()),
 	)
 
 	startCtx, startCancel := context.WithTimeout(ctx, 10*time.Second)
 	if err := pipe.Open(startCtx); err != nil {
 		startCancel()
-		return fmt.Errorf("cannot open pipeline: %v", err)
+		return nil, fmt.Errorf("cannot open pipeline: %v", err)
 	}
 	startCancel()
-
-	r.recording.Store(roomId, info)
-	r.pipes.Store(roomId, pipe)
-
-	go r.rev(roomId, ch, info, pipe)
-	go r.checkRecordingDurationPeriodically(roomId, ctx)
-	return nil
+	return pipe, nil
 }
 
-func (r *Service) rev(roomId int, ch <-chan []byte, info *Recorder, pipe *pipeline.Pipe[[]byte]) {
+func (r *Service) rev(roomId int, ch <-chan []byte, ctx context.Context, info *Recorder, pipe *pipeline.Pipe[[]byte]) {
 	l := logger.WithField("room", roomId)
 	defer r.recover(roomId)
+	currentPipe := pipe
 	defer func() {
-		pipe.Close()
+		currentPipe.Close()
 		go r.finalize(roomId, info)
 	}()
 	for data := range ch {
 
 		info.bytesRead.Add(uint64(len(data)))
-		result, err := pipe.Process(r.ctx, data)
+		info.segmentBytes.Add(uint64(len(data)))
+		result, err := currentPipe.Process(r.ctx, data)
 		r.st.Flush(data)
 		r.st.Flush(result)
 
@@ -249,7 +275,70 @@ func (r *Service) rev(roomId int, ch <-chan []byte, info *Recorder, pipe *pipeli
 			}
 			return
 		}
+
+		if r.shouldRotateSegment(info) {
+			if err := r.rotateSegment(roomId, info, ctx, &currentPipe); err != nil {
+				l.Errorf("failed to rotate segment by size: %v", err)
+			}
+		}
 	}
+}
+
+func (r *Service) shouldRotateSegment(info *Recorder) bool {
+	maxSize := r.cfg.MaxRecordingFileSizeBytes
+	return maxSize > 0 && info.segmentBytes.Load() >= uint64(maxSize)
+}
+
+func (r *Service) nextSegmentOutputPath(currentPath string, now time.Time) string {
+	dir := filepath.Dir(currentPath)
+	ext := filepath.Ext(currentPath)
+	baseWithoutExt := strings.TrimSuffix(filepath.Base(currentPath), ext)
+
+	prefix := baseWithoutExt
+	if idx := strings.LastIndex(baseWithoutExt, "-"); idx > 0 {
+		prefix = baseWithoutExt[:idx]
+	}
+
+	timestamp := now.Format("20060102_150405")
+	candidate := filepath.Join(dir, fmt.Sprintf("%s-%s%s", prefix, timestamp, ext))
+
+	if candidate != currentPath && !r.writtingFiles.Contains(filepath.Base(candidate)) {
+		if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+			return candidate
+		}
+	}
+
+	for suffix := 1; ; suffix++ {
+		candidate = filepath.Join(dir, fmt.Sprintf("%s-%s-%d%s", prefix, timestamp, suffix, ext))
+		if r.writtingFiles.Contains(filepath.Base(candidate)) {
+			continue
+		}
+		if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+			return candidate
+		}
+	}
+}
+
+func (r *Service) rotateSegment(roomId int, info *Recorder, ctx context.Context, pipe **pipeline.Pipe[[]byte]) error {
+	oldPipe := *pipe
+	oldPath := info.GetOutputPath()
+	nextPath := r.nextSegmentOutputPath(oldPath, time.Now())
+
+	nextPipe, err := r.newPipe(nextPath, ctx)
+	if err != nil {
+		return err
+	}
+
+	r.writtingFiles.Add(filepath.Base(nextPath))
+	info.SetOutputPath(nextPath)
+	info.segmentBytes.Store(0)
+
+	r.pipes.Store(roomId, nextPipe)
+	*pipe = nextPipe
+
+	oldPipe.Close()
+	go r.finalize(roomId, &Recorder{outputPath: oldPath})
+	return nil
 }
 
 func (r *Service) checkRecordingDurationPeriodically(roomId int, ctx context.Context) {
@@ -346,16 +435,17 @@ func (r *Service) finalize(roomId int, info *Recorder) {
 		return
 	}
 
-	defer r.writtingFiles.Remove(filepath.Base(info.outputPath))
+	outputPath := info.GetOutputPath()
+	defer r.writtingFiles.Remove(filepath.Base(outputPath))
 
-	fileInfo, err := os.Stat(info.outputPath)
+	fileInfo, err := os.Stat(outputPath)
 	if err != nil {
 		logger.Errorf("failed to stat recorded file for room %d: %v", roomId, err)
 		return
 	} else if fileInfo.Size() < 1024 { // less than 1KB
 		logger.Warnf("recorded file for room %d is too small (%d bytes), skipping finallization and removing file", roomId, fileInfo.Size())
-		if err := os.Remove(info.outputPath); err != nil {
-			logger.Errorf("failed to remove empty file %s: %v", info.outputPath, err)
+		if err := os.Remove(outputPath); err != nil {
+			logger.Errorf("failed to remove empty file %s: %v", outputPath, err)
 		}
 		return
 	}
@@ -366,7 +456,7 @@ func (r *Service) finalize(roomId int, info *Recorder) {
 	}
 
 	// process finalization via convert service
-	if queue, err := r.cv.Enqueue(info.outputPath, "mp4", r.cfg.DeleteFlvAfterConvert); err != nil {
+	if queue, err := r.cv.Enqueue(outputPath, "mp4", r.cfg.DeleteFlvAfterConvert); err != nil {
 		logger.Errorf("failed to enqueue conversion for room %d: %v", roomId, err)
 		logger.Warnf("you may need to convert mp4 manually for room: %d", roomId)
 	} else {
@@ -424,7 +514,6 @@ func (r *Service) prepareFilePath(info *bilibili.LiveRoomInfoDetail, start time.
 	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 20)
 	return fmt.Sprintf("%s/%s-%s.flv", dirPath, safeTitle, start.Format("20060102_150405")), nil
 }
-
 
 func initOutputDir(cfg *config.Config) {
 	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {

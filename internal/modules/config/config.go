@@ -15,9 +15,10 @@ type Config struct {
 	AnonymousLogin bool
 	Port           string
 
-	MaxConcurrentRecordings int
-	MaxRecordingHours       int
-	MaxRecoveryAttempts     int
+	MaxConcurrentRecordings   int
+	MaxRecordingHours         int
+	MaxRecoveryAttempts       int
+	MaxRecordingFileSizeBytes int64
 
 	OutputDir   string
 	SecretDir   string
@@ -82,26 +83,27 @@ func provider() (*Config, error) {
 	}
 
 	c := &Config{
-		AnonymousLogin:          os.Getenv("ANONYMOUS_LOGIN") == "true",
-		Port:                    utils.EmptyOrElse(os.Getenv("PORT"), "8080"),
-		MaxConcurrentRecordings: utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_CONCURRENT_RECORDINGS"), "3")),
-		MaxRecordingHours:       utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_RECORDING_HOURS"), "5")),
-		MaxRecoveryAttempts:     utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_RECOVERY_ATTEMPTS"), "5")),
-		OutputDir:               utils.EmptyOrElse(os.Getenv("OUTPUT_DIR"), "records"),
-		SecretDir:               utils.EmptyOrElse(os.Getenv("SECRET_DIR"), "secrets"),
-		DatabaseDir:             utils.EmptyOrElse(os.Getenv("DATABASE_DIR"), "database"),
-		CloudConvertThreshold:   utils.MustAtoi64(utils.EmptyOrElse(os.Getenv("CLOUDCONVERT_THRESHOLD"), "1073741824")), // 1 GB
-		CloudConvertApiKey:      os.Getenv("CLOUDCONVERT_API_KEY"),                                                      // empty to disable
-		ConvertFLVToMp4:         os.Getenv("CONVERT_FLV_TO_MP4") == "true",
-		DeleteFlvAfterConvert:   os.Getenv("DELETE_FLV_AFTER_CONVERT") == "true",
-		FrontendURL:             url,
-		BackendHost:             utils.EmptyOrElse(os.Getenv("BACKEND_HOST"), "localhost:8080"),
-		Username:                username,
-		PasswordHash:            string(passwordHash),
-		JwtSecret:               utils.EmptyOrElse(os.Getenv("JWT_SECRET"), "bilirec_secret"),
-		Debug:                   debug,
-		ProductionMode:          os.Getenv("PRODUCTION_MODE") == "true",
-		MinDiskSpaceBytes:       utils.MustAtoi64(utils.EmptyOrElse(os.Getenv("MIN_DISK_SPACE_BYTES"), "5368709120")), // 5GB
+		AnonymousLogin:            os.Getenv("ANONYMOUS_LOGIN") == "true",
+		Port:                      utils.EmptyOrElse(os.Getenv("PORT"), "8080"),
+		MaxConcurrentRecordings:   utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_CONCURRENT_RECORDINGS"), "3")),
+		MaxRecordingHours:         utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_RECORDING_HOURS"), "5")),
+		MaxRecoveryAttempts:       utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_RECOVERY_ATTEMPTS"), "5")),
+		MaxRecordingFileSizeBytes: utils.MustAtoi64(utils.EmptyOrElse(os.Getenv("MAX_RECORDING_FILE_SIZE_BYTES"), "0")),
+		OutputDir:                 utils.EmptyOrElse(os.Getenv("OUTPUT_DIR"), "records"),
+		SecretDir:                 utils.EmptyOrElse(os.Getenv("SECRET_DIR"), "secrets"),
+		DatabaseDir:               utils.EmptyOrElse(os.Getenv("DATABASE_DIR"), "database"),
+		CloudConvertThreshold:     utils.MustAtoi64(utils.EmptyOrElse(os.Getenv("CLOUDCONVERT_THRESHOLD"), "1073741824")), // 1 GB
+		CloudConvertApiKey:        os.Getenv("CLOUDCONVERT_API_KEY"),                                                      // empty to disable
+		ConvertFLVToMp4:           os.Getenv("CONVERT_FLV_TO_MP4") == "true",
+		DeleteFlvAfterConvert:     os.Getenv("DELETE_FLV_AFTER_CONVERT") == "true",
+		FrontendURL:               url,
+		BackendHost:               utils.EmptyOrElse(os.Getenv("BACKEND_HOST"), "localhost:8080"),
+		Username:                  username,
+		PasswordHash:              string(passwordHash),
+		JwtSecret:                 utils.EmptyOrElse(os.Getenv("JWT_SECRET"), "bilirec_secret"),
+		Debug:                     debug,
+		ProductionMode:            os.Getenv("PRODUCTION_MODE") == "true",
+		MinDiskSpaceBytes:         utils.MustAtoi64(utils.EmptyOrElse(os.Getenv("MIN_DISK_SPACE_BYTES"), "5368709120")), // 5GB
 
 		// global performance configs
 		uploadBufferSize:           utils.MustAtoi(utils.EmptyOrElse(os.Getenv("UPLOAD_BUFFER_SIZE"), "5242880")),             // default 5MB

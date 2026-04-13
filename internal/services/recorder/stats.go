@@ -47,7 +47,7 @@ func (r *Service) GetStats(roomId int) (*Stats, bool) {
 		Status:         status,
 		StartTime:      info.startTime.Unix(),
 		ElapsedSeconds: int64(time.Since(info.startTime).Seconds()),
-		OutputPath:     info.outputPath,
+		OutputPath:     info.GetOutputPath(),
 	}, true
 }
 
