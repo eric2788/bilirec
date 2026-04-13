@@ -9,22 +9,28 @@ import (
 	"os"
 )
 
-func (c *Client) CreateImportURLTask(payload *ImportURLRequest) (*TaskResponse, error) {
-	req := c.client.R().
-		SetContext(c.ctx).
-		SetBody(payload)
+func NewImportURLTask(name string, payload *ImportURLRequest) *JobCreateTask {
+	return &JobCreateTask{
+		Name:      name,
+		Operation: "import/url",
+		Payload:   payload,
+	}
+}
 
-	res, err := req.Post("/import/url")
-	if err != nil {
-		return nil, err
-	} else if res.StatusCode() < 200 || res.StatusCode() >= 400 {
-		return nil, fmt.Errorf("create import url task failed with status code %d: %s", res.StatusCode(), res.String())
+func NewImportUploadTask(name string, payload *ImportUploadRequest) *JobCreateTask {
+	return &JobCreateTask{
+		Name:      name,
+		Operation: "import/upload",
+		Payload:   payload,
 	}
-	var taskRes TaskResponse
-	if err := json.Unmarshal(res.Body(), &taskRes); err != nil {
-		return nil, err
+}
+
+func NewImportS3Task(name string, payload *ImportS3Request) *JobCreateTask {
+	return &JobCreateTask{
+		Name:      name,
+		Operation: "import/s3",
+		Payload:   payload,
 	}
-	return &taskRes, nil
 }
 
 func (c *Client) CreateUploadTask(redirect ...string) (*ImportUploadResponse, error) {
@@ -51,7 +57,7 @@ func (c *Client) CreateUploadTask(redirect ...string) (*ImportUploadResponse, er
 // UploadFileToTask uploads the given file to the specified import upload task.
 // This function will use net/http instead of resty due to the need of streaming upload with pipe.
 // It is because `resty@v2` will buffer the entire request body in memory which cause OOM for large files.
-func (c *Client) UploadFileToTask(f *os.File, task *ImportUploadTask) error {
+func (c *Client) UploadFileToTask(f *os.File, form *ImportUploadForm) error {
 	defer f.Close()
 	// Ensure file offset at beginning
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -67,7 +73,7 @@ func (c *Client) UploadFileToTask(f *os.File, task *ImportUploadTask) error {
 		defer mw.Close()
 
 		// write form fields
-		for k, v := range task.Result.Form.Parameters {
+		for k, v := range form.Parameters {
 			if err := mw.WriteField(k, fmt.Sprint(v)); err != nil {
 				pw.CloseWithError(err)
 				return
@@ -90,7 +96,7 @@ func (c *Client) UploadFileToTask(f *os.File, task *ImportUploadTask) error {
 	}()
 
 	// Create HTTP request using standard library (NOT resty)
-	httpReq, err := http.NewRequestWithContext(c.ctx, "POST", task.Result.Form.URL, pr)
+	httpReq, err := http.NewRequestWithContext(c.ctx, "POST", form.URL, pr)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -110,22 +116,4 @@ func (c *Client) UploadFileToTask(f *os.File, task *ImportUploadTask) error {
 	}
 
 	return nil
-}
-
-func (c *Client) CreateImportS3Task(payload *ImportS3Request) (*TaskResponse, error) {
-	req := c.client.R().
-		SetContext(c.ctx).
-		SetBody(payload)
-
-	res, err := req.Post("/import/s3")
-	if err != nil {
-		return nil, err
-	} else if res.StatusCode() < 200 || res.StatusCode() >= 400 {
-		return nil, fmt.Errorf("create import s3 task failed with status code %d: %s", res.StatusCode(), res.String())
-	}
-	var taskRes TaskResponse
-	if err := json.Unmarshal(res.Body(), &taskRes); err != nil {
-		return nil, err
-	}
-	return &taskRes, nil
 }

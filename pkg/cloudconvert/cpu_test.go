@@ -58,12 +58,32 @@ func TestCPUUsage_Upload1GB(t *testing.T) {
 	defer cancel()
 
 	client := cloudconvert.NewClient(ctx, os.Getenv("CLOUDCONVERT_API_KEY"))
+	const (
+		importTaskName = "import-source-cpu"
+		exportTaskName = "export-output-cpu"
+	)
 
-	res, err := client.CreateUploadTask()
+	job, err := client.NewJobBuilder().
+		AddTask(cloudconvert.NewImportUploadTask(importTaskName, &cloudconvert.ImportUploadRequest{})).
+		AddTask(cloudconvert.NewExportURLTask(exportTaskName, &cloudconvert.ExportURLRequest{
+			Input: importTaskName,
+		})).
+		Submit()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("Created upload task: %s", res.Data.ID)
+
+	uploadTask := job.TaskData(importTaskName)
+	if uploadTask == nil {
+		t.Fatalf("import task data not found for task name %s", importTaskName)
+	}
+
+	exportTaskID := job.TaskID(exportTaskName)
+	if exportTaskID == "" {
+		t.Fatalf("export task id not found for task name %s", exportTaskName)
+	}
+	t.Logf("Created upload task: %s", uploadTask.ID)
+	t.Logf("Export task id=%s (use CLOUDCONVERT_TASK_ID to download)", exportTaskID)
 
 	// open file
 	f, err := os.Open(filePath)
@@ -83,7 +103,7 @@ func TestCPUUsage_Upload1GB(t *testing.T) {
 	}()
 
 	start := time.Now()
-	if err := client.UploadFileToTask(f, &res.Data); err != nil {
+	if err := client.UploadFileToTask(f, uploadTask.Result.Form); err != nil {
 		t.Fatalf("upload failed: %v", err)
 	}
 	dur := time.Since(start)

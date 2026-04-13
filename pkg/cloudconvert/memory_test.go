@@ -389,11 +389,33 @@ func testMemoryUpload(t *testing.T, filename string, size int64) {
 	afterOpenStats := logMemStats(t, "AFTER FILE OPEN")
 
 	// Create upload task
-	res, err := client.CreateUploadTask()
+	const (
+		importTaskName = "import-source-memory"
+		exportTaskName = "export-output-memory"
+	)
+
+	job, err := client.NewJobBuilder().
+		AddTask(cloudconvert.NewImportUploadTask(importTaskName, &cloudconvert.ImportUploadRequest{})).
+		AddTask(cloudconvert.NewExportURLTask(exportTaskName, &cloudconvert.ExportURLRequest{
+			Input: importTaskName,
+		})).
+		Submit()
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("✅ Created upload task:  %s", res.Data.ID)
+
+	uploadTask := job.TaskData(importTaskName)
+	if uploadTask == nil {
+		t.Fatalf("import task data not found for task name %s", importTaskName)
+	}
+
+	exportTaskID := job.TaskID(exportTaskName)
+	if exportTaskID == "" {
+		t.Fatalf("export task id not found for task name %s", exportTaskName)
+	}
+
+	t.Logf("✅ Created upload task:  %s", uploadTask.ID)
+	t.Logf("✅ Created export URL task: %s", exportTaskID)
 
 	afterTaskStats := logMemStats(t, "AFTER CREATE TASK")
 
@@ -401,7 +423,7 @@ func testMemoryUpload(t *testing.T, filename string, size int64) {
 	t.Logf("📤 Starting upload...")
 	uploadStart := time.Now()
 
-	if err := client.UploadFileToTask(f, &res.Data); err != nil {
+	if err := client.UploadFileToTask(f, uploadTask.Result.Form); err != nil {
 		t.Fatalf("Upload failed: %v", err)
 	}
 
@@ -410,17 +432,8 @@ func testMemoryUpload(t *testing.T, filename string, size int64) {
 
 	afterUploadStats := logMemStats(t, "AFTER UPLOAD")
 
-	// If task ID env not set, create export task for download test
 	if os.Getenv("CLOUDCONVERT_TASK_ID") == "" {
-		// export url
-		exported, err := client.CreateExportURL(&cloudconvert.ExportURLRequest{
-			Input: res.Data.ID,
-		})
-		if err != nil {
-			t.Fatalf("Create export URL failed: %v", err)
-		}
-
-		t.Logf("✅ Created export URL task: %s", exported.Data.ID) // use this task ID for download test
+		t.Logf("✅ Use this task ID for download test: %s", exportTaskID)
 	}
 
 	// Force GC to see retained memory

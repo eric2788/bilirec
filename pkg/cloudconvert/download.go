@@ -6,6 +6,14 @@ import (
 	"io"
 )
 
+func NewExportURLTask(name string, payload *ExportURLRequest) *JobCreateTask {
+	return &JobCreateTask{
+		Name:      name,
+		Operation: "export/url",
+		Payload:   payload,
+	}
+}
+
 func (c *Client) CreateExportURL(payload *ExportURLRequest) (*TaskResponse, error) {
 	req := c.client.R().
 		SetContext(c.ctx).

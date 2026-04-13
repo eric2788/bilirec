@@ -20,7 +20,13 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const cloudConvertBucket = "Queue_CloudConvert"
+const (
+	cloudConvertBucket = "Queue_CloudConvert"
+
+	importTaskName  = "import-source"
+	convertTaskName = "convert-output"
+	exportTaskName  = "export-output"
+)
 
 type cloudConvertManager struct {
 	bucket     *db.Bucket
@@ -66,37 +72,35 @@ func (c *cloudConvertManager) Enqueue(inputPath, outputPath, format string, dele
 		return nil, err
 	}
 
-	task, err := c.client.CreateImportURLTask(&cloudconvert.ImportURLRequest{
-		URL:      url,
-		Filename: filepath.Base(inputPath),
-	})
+	originalFormat := filepath.Ext(inputPath)[1:]
+
+	job, err := c.client.NewJobBuilder().
+		AddTask(cloudconvert.NewImportURLTask(importTaskName, &cloudconvert.ImportURLRequest{
+			URL:      url,
+			Filename: filepath.Base(inputPath),
+		})).
+		AddTask(cloudconvert.NewVideoConvertTask(convertTaskName, &cloudconvert.VideoConvertPayload{
+			Input:        importTaskName,
+			InputFormat:  originalFormat,
+			OutputFormat: format,
+			VideoCodec:   "copy",
+			AudioCodec:   "copy",
+			Filename:     filepath.Base(outputPath),
+		})).
+		AddTask(cloudconvert.NewExportURLTask(exportTaskName, &cloudconvert.ExportURLRequest{
+			Input: convertTaskName,
+		})).
+		Submit()
 	if err != nil {
 		return nil, err
 	}
 
-	originalFormat := filepath.Ext(inputPath)[1:]
-	res, err := c.client.VideoConvert(&cloudconvert.VideoConvertPayload{
-		Input:        task.Data.ID,
-		InputFormat:  originalFormat,
-		OutputFormat: format,
-		VideoCodec:   "copy",
-		AudioCodec:   "copy",
-		Filename:     filepath.Base(outputPath),
-	})
-	if err != nil {
-		return nil, err
-	}
-	// do export here and get that task ID
-	exporter, err := c.client.CreateExportURL(&cloudconvert.ExportURLRequest{
-		Input: res.Data.ID,
-	})
-	if err != nil {
-		return nil, err
-	}
+	convertTaskID := job.TaskID(convertTaskName)
+	exportTaskID := job.TaskID(exportTaskName)
 
 	queue := &TaskQueue{
-		TaskID:        exporter.Data.ID,
-		ConvertTaskID: res.Data.ID,
+		TaskID:        exportTaskID,
+		ConvertTaskID: convertTaskID,
 		InputPath:     inputPath,
 		OutputPath:    outputPath,
 		InputFormat:   originalFormat,

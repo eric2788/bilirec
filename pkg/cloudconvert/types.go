@@ -14,6 +14,15 @@ type VideoConvertPayload struct {
 	Timeout  int    `json:"timeout,omitempty"`
 }
 
+type CommandPayload struct {
+	Input         any    `json:"input"`
+	Engine        string `json:"engine"` // ffmpeg, ffmpeg_nvidia, etc.
+	EngineVersion string `json:"engine_version,omitempty"`
+	Command       string `json:"command"`
+	Arguments     string `json:"arguments,omitempty"`
+	Timeout       int    `json:"timeout,omitempty"`
+}
+
 type ConvertTaskResponse struct {
 	Data TaskData `json:"data"`
 }
@@ -97,6 +106,7 @@ type TaskListResponse struct {
 
 type TaskData struct {
 	ID             string            `json:"id"`
+	Name           string            `json:"name"`
 	JobID          string            `json:"job_id"`
 	Operation      string            `json:"operation"`
 	Status         TaskStatus        `json:"status"`
@@ -146,11 +156,33 @@ type TaskListFilter struct {
 }
 
 type TaskResult struct {
-	Files []TaskResultFile `json:"files"`
+	Files []TaskResultFile  `json:"files"`
+	Form  *ImportUploadForm `json:"form,omitempty"`
 }
 
 type TaskResultFile struct {
 	Filename string `json:"filename"`
 	Size     int64  `json:"size"`
 	URL      string `json:"url"`
+}
+
+type JobResponse struct {
+	Data JobData `json:"data"`
+}
+
+type JobData struct {
+	ID        string     `json:"id"`
+	Tag       string     `json:"tag"`
+	Status    TaskStatus `json:"status"`
+	CreatedAt string     `json:"created_at"`
+	StartedAt *string    `json:"started_at"`
+	EndedAt   *string    `json:"ended_at"`
+	Tasks     []TaskData `json:"tasks"`
+}
+
+type JobCreateTask struct {
+	Name           string
+	Operation      string
+	Payload        any
+	DependsOnTasks map[string]string
 }
