@@ -24,7 +24,7 @@ const (
 	cloudConvertBucket = "Queue_CloudConvert"
 
 	importTaskName  = "import-source"
-	convertTaskName = "convert-output"
+	commandTaskName = "command-convert"
 	exportTaskName  = "export-output"
 )
 
@@ -79,23 +79,26 @@ func (c *cloudConvertManager) Enqueue(inputPath, outputPath, format string, dele
 			URL:      url,
 			Filename: filepath.Base(inputPath),
 		})).
-		AddTask(cloudconvert.NewVideoConvertTask(convertTaskName, &cloudconvert.VideoConvertPayload{
-			Input:        importTaskName,
-			InputFormat:  originalFormat,
-			OutputFormat: format,
-			VideoCodec:   "copy",
-			AudioCodec:   "copy",
-			Filename:     filepath.Base(outputPath),
+		AddTask(cloudconvert.NewCommandTask(commandTaskName, &cloudconvert.CommandPayload{
+			Input:   importTaskName,
+			Engine:  "ffmpeg",
+			Command: "ffmpeg",
+			Arguments: fmt.Sprintf(
+				"-i /input/%s/%s -map 0 -map_metadata 0 -movflags +faststart -c copy /output/%s",
+				importTaskName,
+				filepath.Base(inputPath),
+				filepath.Base(outputPath),
+			),
 		})).
 		AddTask(cloudconvert.NewExportURLTask(exportTaskName, &cloudconvert.ExportURLRequest{
-			Input: convertTaskName,
+			Input: commandTaskName,
 		})).
 		Submit()
 	if err != nil {
 		return nil, err
 	}
 
-	convertTaskID := job.TaskID(convertTaskName)
+	convertTaskID := job.TaskID(commandTaskName)
 	exportTaskID := job.TaskID(exportTaskName)
 
 	queue := &TaskQueue{
