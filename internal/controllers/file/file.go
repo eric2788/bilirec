@@ -3,6 +3,7 @@ package file
 import (
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -39,6 +40,7 @@ func NewController(
 	files := app.Group("/files")
 
 	files.Get("/browse/*", fc.listFiles)
+	files.Get("/playback/*", fc.playbackFile)
 	files.Get("/download/*", fc.downloadFile)
 	files.Get("/tempdownload", fc.presignedDownload)
 	files.Get("/disk-space", fc.getDiskSpace)
@@ -48,6 +50,41 @@ func NewController(
 	files.Delete("/*", fc.deleteDir)
 
 	return fc
+}
+
+// @Summary Playback a video file
+// @Description Stream a video file inline for browser playback (VOD only)
+// @Tags files
+// @Security BearerAuth
+// @Accept json
+// @Produce video/mp4
+// @Param path path string true "Video file path"
+// @Success 200 {file} binary "Video stream"
+// @Failure 400 {string} string "Bad request"
+// @Failure 403 {string} string "Forbidden"
+// @Failure 404 {string} string "Not found"
+// @Failure 415 {string} string "Unsupported media type"
+// @Router /files/playback/{path} [get]
+func (c *Controller) playbackFile(ctx fiber.Ctx) error {
+	raw := ctx.Params("*", "/")
+	path, err := url.PathUnescape(raw)
+	if err != nil {
+		return fiber.ErrBadRequest
+	}
+
+	fullPath, mimeType, err := c.fileSvc.OpenForPlayback(path)
+	if err != nil {
+		logger.Warnf("error opening playback file %s: %v", path, err)
+		return c.parseFiberError(err)
+	}
+
+	ctx.Set(fiber.HeaderContentType, mimeType)
+	ctx.Set(
+		fiber.HeaderContentDisposition,
+		"inline; filename=\""+filepath.Base(fullPath)+"\"",
+	)
+
+	return ctx.SendFile(fullPath, fiber.SendFile{ByteRange: true})
 }
 
 // @Summary List files and directories
@@ -284,6 +321,8 @@ func (c *Controller) parseFiberError(err error) error {
 		return fiber.NewError(fiber.StatusBadRequest, "無效文件路徑")
 	case err == file.ErrIsDirectory:
 		return fiber.NewError(fiber.StatusBadRequest, "此路徑為文件夾")
+	case err == file.ErrUnsupportedPlaybackMedia:
+		return fiber.NewError(fiber.StatusUnsupportedMediaType, "此檔案格式不支援線上播放")
 	default:
 		return fiber.ErrInternalServerError
 	}
