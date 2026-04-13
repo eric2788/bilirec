@@ -33,6 +33,7 @@ type RecordStatus string
 const Recording RecordStatus = "recording"
 const Recovering RecordStatus = "recovering"
 const Idle RecordStatus = "idle"
+// maxSegmentNameCollisionAttempts bounds file name retries during segment rotation.
 const maxSegmentNameCollisionAttempts = 1000
 
 // var idlePtr *RecordStatus = utils.Ptr(Idle)
