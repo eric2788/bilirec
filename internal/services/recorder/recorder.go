@@ -295,7 +295,7 @@ func (r *Service) nextSegmentOutputPath(currentPath string, now time.Time) strin
 	baseWithoutExt := strings.TrimSuffix(filepath.Base(currentPath), ext)
 
 	prefix := baseWithoutExt
-	if idx := strings.LastIndex(baseWithoutExt, "-"); idx > 0 {
+	if idx := strings.LastIndex(baseWithoutExt, "-"); idx >= 0 {
 		prefix = baseWithoutExt[:idx]
 	}
 
@@ -308,7 +308,7 @@ func (r *Service) nextSegmentOutputPath(currentPath string, now time.Time) strin
 		}
 	}
 
-	for suffix := 1; ; suffix++ {
+	for suffix := 1; suffix <= 1000; suffix++ {
 		candidate = filepath.Join(dir, fmt.Sprintf("%s-%s-%d%s", prefix, timestamp, suffix, ext))
 		if r.writtingFiles.Contains(filepath.Base(candidate)) {
 			continue
@@ -317,6 +317,8 @@ func (r *Service) nextSegmentOutputPath(currentPath string, now time.Time) strin
 			return candidate
 		}
 	}
+
+	return filepath.Join(dir, fmt.Sprintf("%s-%d%s", prefix, now.UnixNano(), ext))
 }
 
 func (r *Service) rotateSegment(roomId int, info *Recorder, ctx context.Context, pipe **pipeline.Pipe[[]byte]) error {
