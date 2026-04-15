@@ -84,7 +84,7 @@ func (c *cloudConvertManager) Enqueue(inputPath, outputPath, format string, dele
 			Engine:  "ffmpeg",
 			Command: "ffmpeg",
 			Arguments: fmt.Sprintf(
-				"-i /input/%s/%s -map 0 -map_metadata 0 -movflags +faststart -c copy /output/%s",
+				"-i \"/input/%s/%s\" -map 0 -map_metadata 0 -movflags +faststart -c copy \"/output/%s\"",
 				importTaskName,
 				filepath.Base(inputPath),
 				filepath.Base(outputPath),
