@@ -158,7 +158,7 @@ func (s *Service) shoulduseCloudConvert(fileSize int64) bool {
 
 func (s *Service) checkAvailableManagers() error {
 	if len(s.managers) == 0 {
-		return fmt.Errorf("no convert manager available")
+		return ErrNoConvertManager
 	}
 	return nil
 }

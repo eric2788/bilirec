@@ -37,7 +37,7 @@ func newFFmpegConvertManager(getActives GetActiveRecordings) ConvertManager {
 
 func (f *ffmpegConvertManager) StartWorker(ctx context.Context, db *db.Client) error {
 	if !utils.FFmpegAvailable() {
-		return ErrCloudConvertNotConfigured
+		return ErrFFmpegNotInstalled
 	} else if bucket, err := db.Bucket(ffmpegBucket); err != nil {
 		return err
 	} else {
