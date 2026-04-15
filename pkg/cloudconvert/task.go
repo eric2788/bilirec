@@ -2,10 +2,13 @@ package cloudconvert
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 )
+
+var ErrTaskNotFound = errors.New("task not found")
 
 func (c *Client) GetTask(taskID string, includes ...string) (*TaskResponse, error) {
 	req := c.client.R().
@@ -16,6 +19,9 @@ func (c *Client) GetTask(taskID string, includes ...string) (*TaskResponse, erro
 	res, err := req.Get("/tasks/{id}")
 	if err != nil {
 		return nil, err
+	}
+	if res.StatusCode() == 404 {
+		return nil, ErrTaskNotFound
 	}
 
 	var taskRes TaskResponse
@@ -85,7 +91,7 @@ func (c *Client) RetryTask(taskID string) (bool, error) {
 	case 200, 204:
 		return true, nil
 	case 404:
-		return false, nil
+		return false, ErrTaskNotFound
 	default:
 		return false, fmt.Errorf("%d: %s", res.StatusCode(), res.String())
 	}
@@ -103,7 +109,7 @@ func (c *Client) DeleteTask(taskID string) (bool, error) {
 	case 200, 204:
 		return true, nil
 	case 404:
-		return false, nil
+		return false, ErrTaskNotFound
 	default:
 		return false, fmt.Errorf("%d: %s", res.StatusCode(), res.String())
 	}

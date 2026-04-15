@@ -176,7 +176,16 @@ func (c *cloudConvertManager) checkTaskStatusPeriodically(ctx context.Context) {
 					c.logger.Debugf("checking task queue for id=%v", id)
 					info, err := c.client.GetTask(queue.TaskID)
 					if err != nil {
-						c.logger.Errorf("failed to get task info for id=%v: %v", queue.TaskID, err)
+						if err == cloudconvert.ErrTaskNotFound {
+							c.logger.Warnf("task id=%v not found, re-enqueueing", id)
+							if err := c.onFailed(queue, &cloudconvert.TaskData{
+								Message: utils.Ptr("task not found"),
+							}); err != nil {
+								c.logger.Errorf("failed to re-enqueue task id=%v: %v", id, err)
+							}
+						} else {
+							c.logger.Errorf("failed to get task info for id=%v: %v", queue.TaskID, err)
+						}
 						continue
 					}
 
@@ -312,9 +321,9 @@ func (c *cloudConvertManager) downloadExportedFile(ctx context.Context, url, out
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Minute)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 12*time.Hour)
 	defer cancel()
 
-	writer := pool.NewFileStreamWriter(ctx, c.downloadPool)
+	writer := pool.NewFileStreamWriter(timeoutCtx, c.downloadPool)
 	return writer.WriteToFile(rc, outPath, config.ReadOnly.DownloadWriterBufferSize())
 }
