@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/eric2788/bilirec/internal/modules/rest"
 	"github.com/eric2788/bilirec/internal/services/convert"
 	"github.com/eric2788/bilirec/internal/services/file"
 	"github.com/eric2788/bilirec/internal/services/path"
@@ -46,8 +47,8 @@ func NewController(
 	files.Get("/disk-space", fc.getDiskSpace)
 	files.Post("/presigned/*", fc.createPresignedURL)
 
-	files.Delete("/batch", fc.deleteFiles)
-	files.Delete("/*", fc.deleteDir)
+	files.Delete("/batch", rest.AdminOnly, fc.deleteFiles)
+	files.Delete("/*", rest.AdminOnly, fc.deleteDir)
 
 	return fc
 }

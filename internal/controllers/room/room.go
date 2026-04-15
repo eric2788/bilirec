@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
+	"github.com/eric2788/bilirec/internal/modules/rest"
 	"github.com/eric2788/bilirec/internal/services/room"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/gofiber/fiber/v3"
@@ -24,11 +25,11 @@ func NewController(app *fiber.App, roomSvc *room.Service) *Controller {
 	room.Get("/:roomID/info", rc.getRoomInfo)
 	room.Get("/infos", rc.getRoomInfos)
 	room.Get("/:roomID/live", rc.isStreamLiving)
-
 	room.Get("/subscribe", rc.listSubscribeRooms)
 	room.Get("/subscribe/:roomID", rc.isSubscribeRoom)
-	room.Post("/:roomID", rc.subscribeRoom)
-	room.Delete("/:roomID", rc.unsubscribeRoom)
+
+	room.Post("/:roomID", rest.AdminOnly, rc.subscribeRoom)
+	room.Delete("/:roomID", rest.AdminOnly, rc.unsubscribeRoom)
 	return rc
 }
 
@@ -142,6 +143,7 @@ func (r *Controller) isStreamLiving(ctx fiber.Ctx) error {
 // @Param roomID path int true "Room ID"
 // @Success 200 {string} string "Subscription successful"
 // @Failure 400 {string} string "Invalid room ID"
+// @Failure 403 {string} string "Not Admin"
 // @Failure 404 {string} string "Room not found"
 // @Failure 409 {string} string "Already subscribed"
 // @Failure 500 {string} string "Internal server error"
@@ -176,6 +178,7 @@ func (r *Controller) subscribeRoom(ctx fiber.Ctx) error {
 // @Param roomID path int true "Room ID"
 // @Success 200 {string} string "Unsubscription successful"
 // @Failure 400 {string} string "Invalid room ID"
+// @Failure 403 {string} string "Not Admin"
 // @Failure 404 {string} string "Not subscribed"
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/{roomID} [delete]

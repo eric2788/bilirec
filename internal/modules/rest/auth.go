@@ -37,17 +37,19 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 		user := req.User
 		pass := req.Pass
 
-		if !compareUsernameAndPassword(cfg, user, pass) {
+		role := RetrieveRole(cfg, user, pass)
+		if role == "" {
 			return fiber.ErrUnauthorized
 		}
 
 		expire := time.Now().Add(time.Hour * 72)
 
 		claims := jwt.MapClaims{
-			"name": cfg.Username,
+			"name": user,
 			"iat":  time.Now().Unix(),
 			"exp":  expire.Unix(),
 			"iss":  "bilirec",
+			"role": role,
 		}
 
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -67,7 +69,10 @@ func loginHandler(cfg *config.Config) fiber.Handler {
 			SameSite: "None",
 		})
 
-		return c.SendStatus(fiber.StatusOK)
+		return c.JSON(fiber.Map{
+			"user": user,
+			"role": role,
+		})
 	}
 }
 
@@ -95,5 +100,5 @@ func logoutHandler(cfg *config.Config) fiber.Handler {
 }
 
 func compareUsernameAndPassword(cfg *config.Config, user, pass string) bool {
-	return subtle.ConstantTimeCompare([]byte(user), []byte(cfg.Username)) == 1 || bcrypt.CompareHashAndPassword([]byte(cfg.PasswordHash), []byte(pass)) == nil
+	return subtle.ConstantTimeCompare([]byte(user), []byte(cfg.Username)) == 1 && bcrypt.CompareHashAndPassword([]byte(cfg.PasswordHash), []byte(pass)) == nil
 }

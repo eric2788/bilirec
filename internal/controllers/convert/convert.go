@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 
+	"github.com/eric2788/bilirec/internal/modules/rest"
 	"github.com/eric2788/bilirec/internal/services/convert"
 	"github.com/eric2788/bilirec/internal/services/path"
 	"github.com/eric2788/bilirec/utils"
@@ -26,8 +27,8 @@ func NewController(app *fiber.App, convertSvc *convert.Service, pathSvc *path.Se
 
 	converts := app.Group("/convert")
 	converts.Get("/tasks", cc.listConvertTasks)
-	converts.Delete("/tasks/:task_id", cc.cancelTask)
-	converts.Post("/tasks/*", cc.enqueueTask)
+	converts.Delete("/tasks/:task_id", rest.AdminOnly, cc.cancelTask)
+	converts.Post("/tasks/*", rest.AdminOnly, cc.enqueueTask)
 	return cc
 }
 
@@ -75,6 +76,7 @@ func (c *Controller) listConvertTasks(ctx fiber.Ctx) error {
 // @Param task_id path string true "Task ID"
 // @Success 204 {string} string "No Content"
 // @Failure 400 {string} string "Bad Request"
+// @Failure 403 {string} string "Forbidden"
 // @Failure 404 {string} string "Not Found"
 // @Failure 500 {string} string "Internal server error"
 // @Router /convert/tasks/{task_id} [delete]

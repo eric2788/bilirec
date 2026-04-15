@@ -28,11 +28,13 @@ type Config struct {
 	CloudConvertThreshold int64
 	CloudConvertApiKey    string
 
-	BackendHost  string
-	FrontendURL  *url.URL
-	Username     string
-	PasswordHash string
-	JwtSecret    string
+	BackendHost        string
+	FrontendURL        *url.URL
+	Username           string
+	PasswordHash       string
+	ViewerUsername     string
+	ViewerPasswordHash string
+	JwtSecret          string
 
 	Debug          bool
 	ProductionMode bool
@@ -49,21 +51,15 @@ type Config struct {
 func provider() (*Config, error) {
 
 	// parse username and password
-
-	password := os.Getenv("PASSWORD")
-	username := os.Getenv("USERNAME")
-
-	var passwordHash []byte
-	var err error
-
-	if password != "" && username != "" {
-		passwordHash, err = bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	} else {
-		passwordHash, err = []byte{}, nil
-	}
-
+	username, passwordHash, err := parseUsernameAndPassword("USERNAME", "PASSWORD")
 	if err != nil {
 		return nil, err
+	}
+
+	// parse viewer username and password
+	viewerUsername, viewerPasswordHash, viewerErr := parseUsernameAndPassword("VIEWER_USERNAME", "VIEWER_PASSWORD")
+	if viewerErr != nil {
+		return nil, viewerErr
 	}
 
 	// parse frontend url
@@ -98,6 +94,8 @@ func provider() (*Config, error) {
 		BackendHost:             utils.EmptyOrElse(os.Getenv("BACKEND_HOST"), "localhost:8080"),
 		Username:                username,
 		PasswordHash:            string(passwordHash),
+		ViewerUsername:          viewerUsername,
+		ViewerPasswordHash:      string(viewerPasswordHash),
 		JwtSecret:               utils.EmptyOrElse(os.Getenv("JWT_SECRET"), "bilirec_secret"),
 		Debug:                   debug,
 		ProductionMode:          os.Getenv("PRODUCTION_MODE") == "true",
@@ -112,6 +110,19 @@ func provider() (*Config, error) {
 
 	ReadOnly = &GlobalReadOnly{config: c}
 	return c, nil
+}
+
+func parseUsernameAndPassword(usernameKey, passwordKey string) (string, string, error) {
+	username := os.Getenv(usernameKey)
+	password := os.Getenv(passwordKey)
+	if username == "" || password == "" {
+		return "", "", nil
+	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", "", err
+	}
+	return username, string(passwordHash), nil
 }
 
 var Module = fx.Module("config", fx.Provide(provider))

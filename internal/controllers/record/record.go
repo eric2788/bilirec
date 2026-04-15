@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
+	"github.com/eric2788/bilirec/internal/modules/rest"
 	"github.com/eric2788/bilirec/internal/services/recorder"
 	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
@@ -18,11 +19,11 @@ type Controller struct {
 func NewController(app *fiber.App, service *recorder.Service) *Controller {
 	rc := &Controller{service: service}
 	record := app.Group("/record")
-	record.Post("/:roomID/start", rc.startRecording)
-	record.Post("/:roomID/stop", rc.stopRecording)
+	record.Get("/list", rc.listRecordings)
 	record.Get("/:roomID/status", rc.getRecordingStatus)
 	record.Get("/:roomID/stats", rc.getRecordingStats)
-	record.Get("/list", rc.listRecordings)
+	record.Post("/:roomID/start", rest.AdminOnly, rc.startRecording)
+	record.Post("/:roomID/stop", rest.AdminOnly, rc.stopRecording)
 	return rc
 }
 
@@ -35,6 +36,7 @@ func NewController(app *fiber.App, service *recorder.Service) *Controller {
 // @Param roomID path int true "Room ID"
 // @Success 200 "Recording started successfully"
 // @Failure 400 {string} string "Invalid room ID"
+// @Failure 403 {string} string "Forbidden"
 // @Failure 500 {string} string "Internal server error"
 // @Router /record/{roomID}/start [post]
 func (r *Controller) startRecording(ctx fiber.Ctx) error {
@@ -79,6 +81,7 @@ func (r *Controller) startRecording(ctx fiber.Ctx) error {
 // @Param roomID path int true "Room ID"
 // @Success 200 {object} StopResult "Recording stopped"
 // @Failure 400 {string} string "Invalid room ID"
+// @Failure 403 {string} string "Forbidden"
 // @Router /record/{roomID}/stop [post]
 func (r *Controller) stopRecording(ctx fiber.Ctx) error {
 	roomId, err := strconv.Atoi(ctx.Params("roomID"))
