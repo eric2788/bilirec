@@ -45,6 +45,10 @@ func RequiredRoles(roles ...Role) fiber.Handler {
 	}
 	return func(c fiber.Ctx) error {
 
+		if !config.ReadOnly.RestAuthEnabled() {
+			return c.Next()
+		}
+
 		claims := utils.ToJwtClaims(c)
 		if claims == nil {
 			return fiber.NewError(403, "沒有權限")

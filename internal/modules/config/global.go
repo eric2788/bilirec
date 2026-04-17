@@ -22,3 +22,11 @@ func (g *GlobalReadOnly) DownloadWriterBufferSize() int {
 func (g *GlobalReadOnly) LiveStreamWriterBufferSize() int {
 	return g.config.liveStreamWriterBufferSize
 }
+
+func (g *GlobalReadOnly) RestAuthEnabled() bool {
+	return g.config.Username != "" && g.config.PasswordHash != ""
+}
+
+func (g *GlobalReadOnly) ViewerEnabled() bool {
+	return g.RestAuthEnabled() && g.config.ViewerUsername != "" && g.config.ViewerPasswordHash != ""
+}
