@@ -156,7 +156,7 @@ func (c *Controller) downloadFile(ctx fiber.Ctx) error {
 // @Param presigned query string true "Presigned URL token"
 // @Success 200 {file} binary "File stream"
 // @Failure 400 {string} string "Bad request"
-// @Failure 403 {string} string "Forbidden"
+// @Failure 403 {string} string "Token expired"
 // @Failure 404 {string} string "Not found"
 // @Router /files/tempdownload [get]
 func (c *Controller) presignedDownload(ctx fiber.Ctx) error {
@@ -166,6 +166,9 @@ func (c *Controller) presignedDownload(ctx fiber.Ctx) error {
 	}
 	relPath, err := c.pathSvc.ParsePresignedURLToken(token)
 	if err != nil {
+		if err == path.ErrTokenExpired {
+			return fiber.NewError(fiber.StatusForbidden, "Token 已過期")
+		}
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 	fullPath, err := c.pathSvc.ValidatePath(relPath)
