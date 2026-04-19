@@ -71,6 +71,8 @@ func (c *Controller) playbackFile(ctx fiber.Ctx) error {
 	path, err := url.PathUnescape(raw)
 	if err != nil {
 		return fiber.ErrBadRequest
+	} else if c.recorderSvc.IsRecording(path) {
+		return fiber.NewError(fiber.StatusBadRequest, "無法播放正在錄製的文件")
 	}
 
 	fullPath, mimeType, err := c.fileSvc.OpenForPlayback(path)
