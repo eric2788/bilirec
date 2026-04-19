@@ -15,7 +15,11 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-const ffmpegBucket = "Queue_FFmpeg"
+const (
+	ProviderFFmpeg Provider = "ffmpeg"
+
+	ffmpegBucket = "Queue_FFmpeg"
+)
 
 type ffmpegConvertManager struct {
 	bucket     *db.Bucket
@@ -53,6 +57,7 @@ func (f *ffmpegConvertManager) Enqueue(inputPath, outputPath, format string, del
 		return nil, err
 	}
 	queue := &TaskQueue{
+		Provider:     ProviderFFmpeg,
 		TaskID:       uuid,
 		InputPath:    inputPath,
 		OutputPath:   outputPath,

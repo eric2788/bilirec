@@ -21,6 +21,8 @@ import (
 )
 
 const (
+	ProviderCloudConvert Provider = "cloudconvert"
+
 	cloudConvertBucket = "Queue_CloudConvert"
 
 	importTaskName  = "import-source"
@@ -102,6 +104,7 @@ func (c *cloudConvertManager) Enqueue(inputPath, outputPath, format string, dele
 	exportTaskID := job.TaskID(exportTaskName)
 
 	queue := &TaskQueue{
+		Provider:      ProviderCloudConvert,
 		TaskID:        exportTaskID,
 		ConvertTaskID: convertTaskID,
 		InputPath:     inputPath,
