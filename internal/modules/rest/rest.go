@@ -46,6 +46,11 @@ import (
 
 const jwtTokenKey = "jwtToken"
 
+const (
+	mediaStreamCacheControl = "public, max-age=86400"
+	defaultNoCacheControl   = "no-store, no-cache, must-revalidate"
+)
+
 var logger = logrus.WithField("module", "rest")
 
 func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
@@ -89,6 +94,21 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 		),
 		AllowCredentials: true,
 	}))
+
+	app.Use(func(c fiber.Ctx) error {
+		err := c.Next()
+
+		contentType := strings.ToLower(c.GetRespHeader(fiber.HeaderContentType))
+		if isMediaStreamContentType(contentType) {
+			c.Set(fiber.HeaderCacheControl, mediaStreamCacheControl)
+			return err
+		}
+
+		c.Set(fiber.HeaderCacheControl, defaultNoCacheControl)
+		c.Set(fiber.HeaderPragma, "no-cache")
+		c.Set(fiber.HeaderExpires, "0")
+		return err
+	})
 
 	if cfg.Username != "" && cfg.PasswordHash != "" {
 		logger.Info("JWT authentication enabled for REST API")
@@ -149,6 +169,14 @@ func provider(ls fx.Lifecycle, cfg *config.Config) *fiber.App {
 	)
 
 	return app
+}
+
+func isMediaStreamContentType(contentType string) bool {
+	return strings.HasPrefix(contentType, "video/") ||
+		strings.HasPrefix(contentType, "audio/") ||
+		strings.HasPrefix(contentType, "application/vnd.apple.mpegurl") ||
+		strings.HasPrefix(contentType, "application/x-mpegurl") ||
+		strings.HasPrefix(contentType, "application/dash+xml")
 }
 
 var Module = fx.Module("rest", fx.Provide(provider))
