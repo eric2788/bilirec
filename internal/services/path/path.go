@@ -2,6 +2,7 @@ package path
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,10 +16,13 @@ import (
 
 var logger = logrus.WithField("service", "path")
 
-var ErrFileNotFound = fmt.Errorf("file not found")
-var ErrInvalidFilePath = fmt.Errorf("invalid file path")
-var ErrAccessDenied = fmt.Errorf("access denied")
-var ErrTokenExpired = fmt.Errorf("token expired")
+var (
+	ErrFileNotFound    = fmt.Errorf("file not found")
+	ErrInvalidFilePath = fmt.Errorf("invalid file path")
+	ErrAccessDenied    = fmt.Errorf("access denied")
+	ErrTokenExpired    = fmt.Errorf("token expired")
+	ErrInvalidToken    = fmt.Errorf("invalid token")
+)
 
 type Service struct {
 	cfg       *config.Config
@@ -55,10 +59,22 @@ func (s *Service) GeneratePresignedURL(fullPath string, expireAfter time.Duratio
 	return fmt.Sprintf("%s/files/tempdownload?presigned=%s", baseURL, token), nil
 }
 
+func (s *Service) ParsePresignedURL(fullURL string) (string, error) {
+	u, err := url.Parse(fullURL)
+	if err != nil {
+		return "", err
+	}
+	token := u.Query().Get("presigned")
+	if token == "" {
+		return "", ErrInvalidToken
+	}
+	return s.ParsePresignedURLToken(token)
+}
+
 func (s *Service) ParsePresignedURLToken(token string) (string, error) {
 	claim, err := s.presigner.ParseDownloadToken(token)
 	if err != nil {
-		return "", err
+		return "", ErrInvalidToken
 	}
 	if time.Now().Unix() > claim.Exp {
 		return "", ErrTokenExpired

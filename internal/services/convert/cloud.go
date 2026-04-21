@@ -15,6 +15,7 @@ import (
 	"github.com/eric2788/bilirec/pkg/pool"
 	"github.com/eric2788/bilirec/pkg/signeddownload"
 	"github.com/eric2788/bilirec/utils"
+	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/sirupsen/logrus"
 	"go.etcd.io/bbolt"
 	"golang.org/x/sync/semaphore"
@@ -40,18 +41,21 @@ type cloudConvertManager struct {
 	downloadPool *pool.BytesPool
 	concurrent   *semaphore.Weighted
 
+	presignedUrlPool *xsync.Map[string, string] // inputPath -> presignedURL
+
 	pathSvc *path.Service
 }
 
 func newCloudConvertManager(client *cloudconvert.Client, pathSvc *path.Service) ConvertManager {
 	return &cloudConvertManager{
-		logger:       logger.WithField("manager", "cloudconvert"),
-		client:       client,
-		serializer:   pool.NewSerializer(),
-		downloading:  ds.NewSyncedSet[string](),
-		downloadPool: pool.NewBytesPool(config.ReadOnly.DownloadBufferSize()),
-		concurrent:   semaphore.NewWeighted(2),
-		pathSvc:      pathSvc,
+		logger:           logger.WithField("manager", "cloudconvert"),
+		client:           client,
+		serializer:       pool.NewSerializer(),
+		downloading:      ds.NewSyncedSet[string](),
+		downloadPool:     pool.NewBytesPool(config.ReadOnly.DownloadBufferSize()),
+		concurrent:       semaphore.NewWeighted(2),
+		presignedUrlPool: xsync.NewMap[string, string](),
+		pathSvc:          pathSvc,
 	}
 }
 
@@ -69,7 +73,7 @@ func (c *cloudConvertManager) StartWorker(ctx context.Context, db *db.Client) er
 }
 
 func (c *cloudConvertManager) Enqueue(inputPath, outputPath, format string, deleteSource bool) (*TaskQueue, error) {
-	url, err := c.pathSvc.GeneratePresignedURL(inputPath, signeddownload.DefaultExpireAfter)
+	url, err := c.getOrCreatePresignedURL(inputPath)
 	if err != nil {
 		return nil, err
 	}
@@ -250,6 +254,7 @@ func (c *cloudConvertManager) onFinished(ctx context.Context, queue *TaskQueue, 
 	}
 
 	c.logger.Infof("successfully downloaded exported file for task %s to %s", queue.TaskID, queue.OutputPath)
+	c.presignedUrlPool.Delete(queue.InputPath)
 
 	err := utils.WithRetry(3, c.logger, "delete bucket", func() error {
 		return c.bucket.Delete([]byte(queue.TaskID))
@@ -329,4 +334,20 @@ func (c *cloudConvertManager) downloadExportedFile(ctx context.Context, url, out
 
 	writer := pool.NewFileStreamWriter(timeoutCtx, c.downloadPool)
 	return writer.WriteToFile(rc, outPath, config.ReadOnly.DownloadWriterBufferSize())
+}
+
+func (c *cloudConvertManager) getOrCreatePresignedURL(inputPath string) (url string, err error) {
+	if presignedURL, ok := c.presignedUrlPool.Load(inputPath); ok {
+		if _, err = c.pathSvc.ParsePresignedURL(presignedURL); err == nil {
+			url, err = presignedURL, nil
+			return
+		}
+		c.presignedUrlPool.Delete(inputPath)
+		c.logger.Debugf("presigned URL for %s expired or invalid, generating a new one", inputPath)
+	}
+	url, err = c.pathSvc.GeneratePresignedURL(inputPath, signeddownload.DefaultExpireAfter)
+	if err == nil {
+		c.presignedUrlPool.Store(inputPath, url)
+	}
+	return
 }
