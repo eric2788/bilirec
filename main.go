@@ -6,6 +6,7 @@ import (
 
 	"github.com/eric2788/bilirec/internal/controllers/convert"
 	"github.com/eric2788/bilirec/internal/controllers/file"
+	nc "github.com/eric2788/bilirec/internal/controllers/notify"
 	"github.com/eric2788/bilirec/internal/controllers/record"
 	"github.com/eric2788/bilirec/internal/controllers/room"
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
@@ -13,10 +14,13 @@ import (
 	"github.com/eric2788/bilirec/internal/modules/rest"
 	co "github.com/eric2788/bilirec/internal/services/convert"
 	fi "github.com/eric2788/bilirec/internal/services/file"
+	no "github.com/eric2788/bilirec/internal/services/notify"
 	pa "github.com/eric2788/bilirec/internal/services/path"
 	re "github.com/eric2788/bilirec/internal/services/recorder"
 	ro "github.com/eric2788/bilirec/internal/services/room"
 	st "github.com/eric2788/bilirec/internal/services/stream"
+	sc "github.com/eric2788/bilirec/internal/services/subcheck"
+	su "github.com/eric2788/bilirec/internal/services/subscribe"
 	"github.com/eric2788/bilirec/utils"
 	"go.uber.org/fx"
 )
@@ -32,9 +36,13 @@ func MainModule() fx.Option {
 		fx.Provide(st.NewService),
 		fx.Provide(re.NewService),
 		fx.Provide(ro.NewService),
+		fx.Provide(su.NewService),
+		fx.Provide(no.NewService),
+		fx.Provide(sc.NewService),
 		fx.Provide(fi.NewService),
 
 		fx.Invoke(room.NewController),
+		fx.Invoke(nc.NewController),
 		fx.Invoke(record.NewController),
 		fx.Invoke(file.NewController),
 		fx.Invoke(convert.NewController),

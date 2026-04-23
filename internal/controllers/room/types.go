@@ -13,3 +13,14 @@ type SubscribeStatus struct {
 type SubscribeList struct {
 	RoomIds []int `json:"room_ids"`
 }
+
+type RoomConfigResponse struct {
+	RoomId     int  `json:"room_id"`
+	AutoRecord bool `json:"auto_record"`
+	Notify     bool `json:"notify"`
+}
+
+type UpdateRoomConfigRequest struct {
+	AutoRecord bool `json:"auto_record"`
+	Notify     bool `json:"notify"`
+}

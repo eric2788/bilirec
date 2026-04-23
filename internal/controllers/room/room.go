@@ -6,6 +6,7 @@ import (
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
 	"github.com/eric2788/bilirec/internal/modules/rest"
 	"github.com/eric2788/bilirec/internal/services/room"
+	"github.com/eric2788/bilirec/internal/services/subscribe"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/gofiber/fiber/v3"
 	"github.com/sirupsen/logrus"
@@ -15,11 +16,13 @@ var logger = logrus.WithField("controller", "room")
 
 type Controller struct {
 	roomSvc *room.Service
+	subSvc  *subscribe.Service
 }
 
-func NewController(app *fiber.App, roomSvc *room.Service) *Controller {
+func NewController(app *fiber.App, roomSvc *room.Service, subSvc *subscribe.Service) *Controller {
 	rc := &Controller{
 		roomSvc: roomSvc,
+		subSvc:  subSvc,
 	}
 	room := app.Group("/room")
 	room.Get("/:roomID/info", rc.getRoomInfo)
@@ -27,9 +30,11 @@ func NewController(app *fiber.App, roomSvc *room.Service) *Controller {
 	room.Get("/:roomID/live", rc.isStreamLiving)
 	room.Get("/subscribe", rc.listSubscribeRooms)
 	room.Get("/subscribe/:roomID", rc.isSubscribeRoom)
+	room.Get("/:roomID/config", rc.getRoomConfig)
 
 	room.Post("/:roomID", rest.AdminOnly, rc.subscribeRoom)
 	room.Delete("/:roomID", rest.AdminOnly, rc.unsubscribeRoom)
+	room.Put("/:roomID/config", rest.AdminOnly, rc.updateRoomConfig)
 	return rc
 }
 
@@ -154,11 +159,11 @@ func (r *Controller) subscribeRoom(ctx fiber.Ctx) error {
 		logger.Warnf("cannot parse roomId to int: %v", err)
 		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
-	err = r.roomSvc.Subscribe(roomId)
+	err = r.subSvc.Subscribe(roomId)
 	if err != nil {
 		logger.Errorf("error subscribing to room %d: %v", roomId, err)
 		switch {
-		case room.ErrRoomAlreadySubscribed == err:
+		case subscribe.ErrRoomAlreadySubscribed == err:
 			return fiber.NewError(fiber.StatusConflict, "已訂閱此房間")
 		case bilibili.IsErrRoomNotFound(err):
 			return fiber.NewError(fiber.StatusNotFound, "房間不存在")
@@ -188,11 +193,11 @@ func (r *Controller) unsubscribeRoom(ctx fiber.Ctx) error {
 		logger.Warnf("cannot parse roomId to int: %v", err)
 		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
-	err = r.roomSvc.Unsubscribe(roomId)
+	err = r.subSvc.Unsubscribe(roomId)
 	if err != nil {
 		logger.Errorf("error unsubscribing from room %d: %v", roomId, err)
 		return utils.Ternary(
-			room.ErrRoomNotSubscribed == err,
+			subscribe.ErrRoomNotSubscribed == err,
 			fiber.NewError(fiber.StatusNotFound, "未訂閱此房間"),
 			fiber.ErrInternalServerError,
 		)
@@ -217,7 +222,7 @@ func (r *Controller) isSubscribeRoom(ctx fiber.Ctx) error {
 		logger.Warnf("cannot parse roomId to int: %v", err)
 		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
 	}
-	isSubscribed, err := r.roomSvc.IsSubscribed(roomId)
+	isSubscribed, err := r.subSvc.IsSubscribed(roomId)
 	if err != nil {
 		logger.Errorf("error checking subscription status for room %d: %v", roomId, err)
 		return fiber.ErrInternalServerError
@@ -238,12 +243,89 @@ func (r *Controller) isSubscribeRoom(ctx fiber.Ctx) error {
 // @Failure 500 {string} string "Internal server error"
 // @Router /room/subscribe [get]
 func (r *Controller) listSubscribeRooms(ctx fiber.Ctx) error {
-	roomIds, err := r.roomSvc.ListSubscribedRooms()
+	roomIds, err := r.subSvc.ListSubscribedRooms()
 	if err != nil {
 		logger.Errorf("error listing subscribed rooms: %v", err)
 		return fiber.ErrInternalServerError
 	}
 	return ctx.JSON(SubscribeList{
 		RoomIds: roomIds,
+	})
+}
+
+// @Summary Get room subscription config
+// @Description Get subscription config for a room
+// @Tags room
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param roomID path int true "Room ID"
+// @Success 200 {object} RoomConfigResponse "Room config"
+// @Failure 400 {string} string "Invalid room ID"
+// @Failure 404 {string} string "Not subscribed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /room/{roomID}/config [get]
+func (r *Controller) getRoomConfig(ctx fiber.Ctx) error {
+	roomId, err := strconv.Atoi(ctx.Params("roomID"))
+	if err != nil {
+		logger.Warnf("cannot parse roomId to int: %v", err)
+		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
+	}
+
+	cfg, err := r.subSvc.GetConfig(roomId)
+	if err != nil {
+		logger.Errorf("error getting room config for room %d: %v", roomId, err)
+		if err == subscribe.ErrRoomNotSubscribed {
+			return fiber.NewError(fiber.StatusNotFound, "未訂閱此房間")
+		}
+		return fiber.ErrInternalServerError
+	}
+
+	return ctx.JSON(RoomConfigResponse{
+		RoomId:     roomId,
+		AutoRecord: cfg.AutoRecord,
+		Notify:     cfg.Notify,
+	})
+}
+
+// @Summary Update room subscription config
+// @Description Update subscription config for a room
+// @Tags room
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param roomID path int true "Room ID"
+// @Param request body UpdateRoomConfigRequest true "Room config"
+// @Success 200 {object} RoomConfigResponse "Updated room config"
+// @Failure 400 {string} string "Invalid request"
+// @Failure 403 {string} string "Not Admin"
+// @Failure 404 {string} string "Not subscribed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /room/{roomID}/config [put]
+func (r *Controller) updateRoomConfig(ctx fiber.Ctx) error {
+	roomId, err := strconv.Atoi(ctx.Params("roomID"))
+	if err != nil {
+		logger.Warnf("cannot parse roomId to int: %v", err)
+		return fiber.NewError(fiber.StatusBadRequest, "無效的房間 ID")
+	}
+
+	var req UpdateRoomConfigRequest
+	if err := ctx.Bind().Body(&req); err != nil {
+		logger.Warnf("cannot parse update room config body: %v", err)
+		return fiber.NewError(fiber.StatusBadRequest, "無效的請求資料")
+	}
+
+	if err := r.subSvc.UpdateConfig(roomId, &subscribe.RoomConfig{AutoRecord: req.AutoRecord, Notify: req.Notify}); err != nil {
+		logger.Errorf("error updating room config for room %d: %v", roomId, err)
+		if err == subscribe.ErrRoomNotSubscribed {
+			return fiber.NewError(fiber.StatusNotFound, "未訂閱此房間")
+		}
+		return fiber.ErrInternalServerError
+	}
+
+	return ctx.JSON(RoomConfigResponse{
+		RoomId:     roomId,
+		AutoRecord: req.AutoRecord,
+		Notify:     req.Notify,
 	})
 }
