@@ -5,10 +5,13 @@
 ## 功能特性
 
 - ✅ 手动触发录制任务，实时录制直播流
+- ✅ **自动录制** - 为直播间配置自动开播录制
+- ✅ **直播通知** - 实时推送开播通知（支持 SSE）
 - ✅ 支持多个直播间同时录制
 - ✅ 自动处理流中断和恢复
 - ✅ RESTful API 管理录制任务
-- ✅ 文件管理和下载功能
+- ✅ 文件管理、在线播放和下载功能
+- ✅ **在线播放** - 在浏览器中直接预览和播放已录制的视频
 - ✅ 支持匿名登录或账号登录
 - ✅ 自动刷新 Cookie 保持登录状态
 - ✅ 低内存与低 CPU 占用，适合在资源受限设备（如树莓派）上运行
@@ -240,6 +243,28 @@ Content-Type: application/json
   DELETE /files/{path}
   ```
 
+- **在线播放视频**
+  ```
+  GET /files/playback/{path}
+  ```
+  在浏览器中直接播放已录制的 MP4 视频（VOD）。该接口返回视频流，浏览器会直接在网页中显示播放器而非下载文件。
+  
+  支持的格式：
+  - `video/mp4` - MP4 格式视频
+  
+  使用示例：
+  ```html
+  <video controls width="100%">
+    <source src="/files/playback/username-roomID/20250101.mp4" type="video/mp4">
+    Your browser does not support HTML5 video.
+  </video>
+  ```
+  
+  **注意**：
+  - 只支持已完全转换为 MP4 格式的文件（需启用 `CONVERT_FLV_TO_MP4`）
+  - 无法播放正在进行中的录制文件
+  - 支持浏览器的 Range 请求（可快进/快退）
+
 #### 转换任务
 
 - **列出进行中的转换任务**（需要认证，返回任务信息）
@@ -316,6 +341,51 @@ Content-Type: application/json
   }
   ```
 
+- **获取房间配置**
+  ```
+  GET /room/:roomID/config
+  ```
+  获取指定房间的配置（自动录制、通知等）。返回：
+  ```json
+  {
+    "room_id": 123,
+    "auto_record": true,
+    "notify": true
+  }
+  ```
+
+- **更新房间配置**
+  ```
+  PUT /room/:roomID/config
+  ```
+  更新房间的配置（自动录制、通知等）。请求体：
+  ```json
+  {
+    "auto_record": true,
+    "notify": true
+  }
+  ```
+
+#### 实时通知
+
+- **订阅直播通知（SSE）**
+  ```
+  GET /notify/stream
+  ```
+  通过 Server-Sent Events (SSE) 订阅实时直播通知。该接口返回事件流，包括以下事件类型：
+  - `ping` - 心跳信号（确保连接活跃）
+  - `live_detected` - 直播间已开播
+  - `live_auto_record_started` - 直播间已开播并已启动自动录制
+  
+  使用示例（JavaScript）：
+  ```javascript
+  const eventSource = new EventSource('/notify/stream');
+  eventSource.addEventListener('live_detected', (e) => {
+    const data = JSON.parse(e.data);
+    console.log(`房间 ${data.room_id} 已开播: ${data.message}`);
+  });
+  ```
+
 ## 开发与调试
 
 - **启用调试**：设置环境变量 `DEBUG=true` 启用调试模式，服务器启动时会在日志中打印一个临时十六进制令牌（hex token）。
@@ -339,6 +409,7 @@ Content-Type: application/json
 │   ├── controllers/                  # HTTP 控制器
 │   │   ├── convert/                  # 转换任务管理
 │   │   ├── file/                     # 文件管理
+│   │   ├── notify/                   # 实时通知（SSE）
 │   │   ├── record/                   # 录制管理
 │   │   └── room/                     # 房间信息与订阅
 │   ├── modules/                      # 核心模块
@@ -349,15 +420,19 @@ Content-Type: application/json
 │   └── services/                     # 业务逻辑服务
 │       ├── convert/                  # 转换服务
 │       ├── file/                     # 文件操作
+│       ├── notify/                   # 实时通知服务
 │       ├── path/                     # 路径管理
 │       ├── recorder/                 # 直播录制
 │       ├── room/                     # 房间信息与订阅
-│       └── stream/                   # 流处理
+│       ├── stream/                   # 流处理
+│       ├── subcheck/                 # 订阅检查与自动录制
+│       └── subscribe/                # 房间订阅管理
 ├── pkg/                              # 可复用库与工具
 │   ├── cloudconvert/                 # CloudConvert API 客户端
 │   ├── db/                           # 数据库抽象层
 │   ├── ds/                           # 数据结构
 │   ├── flv/                          # FLV 格式处理
+│   ├── fp/                           # 函数式编程工具（maps、slices）
 │   ├── monitor/                      # 监控与统计
 │   ├── pipeline/                     # 流处理管道
 │   ├── pool/                         # 内存池
@@ -377,12 +452,16 @@ Content-Type: application/json
 ### 关键特性
 
 - **自动恢复**: 当流中断时自动重连，详见 [`recorder.Service`](internal/services/recorder/recorder.go)
+- **自动录制**: 为订阅的直播间配置自动开播录制，后台定期检查直播间状态并自动启动录制，详见 [`subcheck.Service`](internal/services/subcheck/check.go)
+- **实时通知**: 通过 SSE 推送直播开播通知和自动录制状态，详见 [`notify.Service`](internal/services/notify/notify.go)
 - **缓冲池**: 使用 [`pool.BufferPool`](pkg/pool/pool.go) 减少内存分配
 - **定期刷盘**: 每 5 秒自动刷新写入缓冲，防止数据丢失
 - **低资源占用**: 设计注重低内存和低 CPU 使用，适合树莓派等资源受限设备
 - **文件管理**: 支持列出、预览、下载（可转换格式）、批量删除文件及删除目录，详见 `internal/controllers/file/file.go`
 - **自动转换**: 如果启用 `CONVERT_FLV_TO_MP4`，录制完成时会自动将 FLV 转为 MP4；可通过 `DELETE_FLV_AFTER_CONVERT` 控制是否删除原始 FLV
+- **在线播放**: 支持在浏览器中直接播放已转换的 MP4 视频，提供原生 HTML5 video 标签体验，支持暂停/快进/全屏等操作
 - **实时修复（Realtime Fixer）**: 在流式写入场景下逐个修复 FLV Tag 的时间戳并输出，包含重复 Tag 去重（可查询去重统计），并通过内存池、去重缓存与周期清理来保持低延迟与低内存占用，适合边录制边推送或实时下载的场景。
+- **函数式编程工具**: 提供 [`fp`](pkg/fp/) 包含便捷的 maps 和 slices 操作函数
 - **REST API 文档**: Swagger UI 在根路径 `/` 提供（由 `swag` 生成，参见 `internal/modules/rest`）
 - **认证与调试**: 可选用户名/密码登录（设置 `USERNAME` 和 `PASSWORD`）启用 JWT 认证；调试模式下可通过 `/debug/pprof` 访问 pprof（受临时 token 或基本 auth 保护）
 - **Cookie 管理**: 自动刷新 Bilibili Cookie 保持登录状态
