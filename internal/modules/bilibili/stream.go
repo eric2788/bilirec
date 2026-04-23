@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/eric2788/bilirec/pkg/fp"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -114,11 +115,9 @@ func (c *Client) GetStreamURLs(roomID int) ([]string, error) {
 		return nil, fmt.Errorf("error getting stream url: %s (code %d)", sr.Message, sr.Code)
 	}
 
-	urls := make([]string, 0, len(sr.Data.Durl))
-	for _, durl := range sr.Data.Durl {
-		urls = append(urls, durl.URL)
-	}
-	return urls, nil
+	return fp.Map(sr.Data.Durl, func(durl StreamURL) string {
+		return durl.URL
+	}), nil
 }
 
 func (c *Client) GetStreamURLsV2(roomID int) ([]string, error) {
@@ -160,24 +159,19 @@ func (c *Client) GetStreamURLsV2(roomID int) ([]string, error) {
 		return nil, fmt.Errorf("error getting stream url: %s (code %d)", sr.Message, sr.Code)
 	}
 
-	urls := make([]string, 0)
-
 	if sr.Data.PlayurlInfo == nil || sr.Data.PlayurlInfo.Playurl == nil {
-		return urls, nil
+		return []string{}, nil
 	}
 
-	for _, stream := range sr.Data.PlayurlInfo.Playurl.Streams {
-		for _, format := range stream.Formats {
-			for _, codec := range format.Codecs {
-				for _, urlInfo := range codec.UrlInfos {
-					fullURL := urlInfo.Host + codec.BaseUrl + urlInfo.Extra
-					urls = append(urls, fullURL)
-				}
-			}
-		}
-	}
-
-	return urls, nil
+	return fp.FlatMap(sr.Data.PlayurlInfo.Playurl.Streams, func(stream StreamItem) []string {
+		return fp.FlatMap(stream.Formats, func(format FormatItem) []string {
+			return fp.FlatMap(format.Codecs, func(codec CodecItem) []string {
+				return fp.Map(codec.UrlInfos, func(urlInfo UrlInfoItem) string {
+					return urlInfo.Host + codec.BaseUrl + urlInfo.Extra
+				})
+			})
+		})
+	}), nil
 }
 
 func (c *Client) FetchLiveStreamUrl(url string) (*resty.Response, error) {
