@@ -41,7 +41,7 @@ var ErrRecordingStarted = errors.New("recording already started")
 var ErrStreamNotLive = errors.New("the room is not live streaming")
 var ErrEmptyStreamURLs = errors.New("no stream urls available")
 var ErrStreamURLsUnreachable = errors.New("all stream urls are unreachable")
-var ErrRoomLocked = errors.New("the room is locked")
+var ErrRoomBanned = errors.New("the room is banned")
 var ErrRoomEncrypted = errors.New("the room is encrypted")
 var ErrInsufficientDiskSpace = errors.New("insufficient disk space")
 
@@ -91,7 +91,7 @@ func NewService(
 
 	go s.backgroundMaintenance(ctx)
 	go initOutputDir(cfg)
-	
+
 	lc.Append(fx.StopHook(cancel))
 	return s
 }
@@ -126,7 +126,7 @@ func (r *Service) Start(roomId int) error {
 	} else if roomInfo.IsEncrypted {
 		return ErrRoomEncrypted
 	} else if roomInfo.LockStatus != 0 {
-		return ErrRoomLocked
+		return ErrRoomBanned
 	} else if roomInfo.LiveStatus != 1 {
 		return ErrStreamNotLive
 	}
@@ -298,7 +298,9 @@ func (r *Service) recover(roomId int) {
 	}
 
 	info.status.Store(recoveringPtr)
-	for attempt := 1; attempt <= r.cfg.MaxRecoveryAttempts; attempt++ {
+	attempt := 1
+	retryStart := time.Now()
+	for {
 		err := r.Start(roomId)
 		if err == nil {
 			l.Info("start live stream recovery: success")
@@ -310,34 +312,47 @@ func (r *Service) recover(roomId int) {
 			l.Infof("stop recovery due to: %v", err)
 			r.Stop(roomId)
 			return
-		case ErrStreamNotLive, ErrRoomEncrypted, ErrRoomLocked:
-			l.Infof("stream is offline, will not recover.")
+		case ErrRoomEncrypted, ErrRoomBanned:
+			l.Infof("stream is banned or premium, will not recover.")
 			r.Stop(roomId)
 			return
 		default:
+
 			// Should check if recording was manually stopped
 			if _, ok := r.recording.Load(roomId); !ok {
 				l.Infof("recording removed during retry, will not recover.")
 				return
 			}
 
-			if attempt < r.cfg.MaxRecoveryAttempts {
-				l.Infof("will retry stream recovery in 15 seconds...")
-				timer := time.NewTimer(15 * time.Second)
-				select {
-				case <-timer.C:
-					continue
-				case <-r.ctx.Done():
-					l.Infof("service is stopping, aborting recovery")
-					timer.Stop()
+			// if the error is stream not live, we should retry until max retry minutes reached, instead of max attempts, since the stream may be live again after some time
+			if err == ErrStreamNotLive {
+				// use r.cfg.MaxRetryMinutes to limit the total retry duration, instead of max attempts, since the stream may be live again after some time
+				if time.Since(retryStart) >= time.Duration(r.cfg.MaxRetryMinutes)*time.Minute {
+					l.Infof("stop recovery after retrying for %d minutes", r.cfg.MaxRetryMinutes)
+					r.Stop(roomId)
 					return
 				}
+			} else if attempt >= r.cfg.MaxRecoveryAttempts {
+				l.Infof("maximum recovery attempts reached (%d), will not recover", r.cfg.MaxRecoveryAttempts)
+				r.Stop(roomId)
+				return
 			}
+
+			l.Infof("will retry stream recovery in 15 seconds...")
+			timer := time.NewTimer(15 * time.Second)
+			
+			select {
+			case <-timer.C:
+				attempt++
+				continue
+			case <-r.ctx.Done():
+				l.Infof("service is stopping, aborting recovery")
+				timer.Stop()
+				return
+			}
+
 		}
 	}
-
-	l.Infof("maximum recovery attempts reached (%d), stopping recording", r.cfg.MaxRecoveryAttempts)
-	r.Stop(roomId)
 }
 
 func (r *Service) finalize(roomId int, info *Recorder) {
@@ -424,7 +439,6 @@ func (r *Service) prepareFilePath(info *bilibili.LiveRoomInfoDetail, start time.
 	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 20)
 	return fmt.Sprintf("%s/%s-%s.flv", dirPath, safeTitle, start.Format("20060102_150405")), nil
 }
-
 
 func initOutputDir(cfg *config.Config) {
 	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {

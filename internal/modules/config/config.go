@@ -18,6 +18,7 @@ type Config struct {
 	MaxConcurrentRecordings int
 	MaxRecordingHours       int
 	MaxRecoveryAttempts     int
+	MaxRetryMinutes         int
 
 	OutputDir   string
 	SecretDir   string
@@ -83,6 +84,7 @@ func provider() (*Config, error) {
 		MaxConcurrentRecordings: utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_CONCURRENT_RECORDINGS"), "3")),
 		MaxRecordingHours:       utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_RECORDING_HOURS"), "5")),
 		MaxRecoveryAttempts:     utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_RECOVERY_ATTEMPTS"), "5")),
+		MaxRetryMinutes:         utils.MustAtoi(utils.EmptyOrElse(os.Getenv("MAX_RETRY_MINUTES"), "10")),
 		OutputDir:               utils.EmptyOrElse(os.Getenv("OUTPUT_DIR"), "records"),
 		SecretDir:               utils.EmptyOrElse(os.Getenv("SECRET_DIR"), "secrets"),
 		DatabaseDir:             utils.EmptyOrElse(os.Getenv("DATABASE_DIR"), "database"),

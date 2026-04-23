@@ -76,6 +76,7 @@ docker run -d --name bilirec -p 8080:8080 eric1008818/bilirec:latest
 | `MAX_CONCURRENT_RECORDINGS` | 最大同时录制数 | `3` |
 | `MAX_RECORDING_HOURS` | 单次录制最长时间（小时） | `5` |
 | `MAX_RECOVERY_ATTEMPTS` | 单次录制的最大重连尝试次数 | `5` |
+| `MAX_RETRY_MINUTES` | 直播中断后判断是否仍在直播的最长容忍时间（分钟） | `10` |
 | `OUTPUT_DIR` | 录制文件保存目录 | `records` |
 | `SECRET_DIR` | Cookie 和 Token 保存目录 | `secrets` |
 | `CONVERT_FLV_TO_MP4` | 在下载时是否将 FLV 转为 MP4 | `false` |
@@ -103,6 +104,7 @@ export PORT=8080
 export MAX_CONCURRENT_RECORDINGS=5
 export MAX_RECORDING_HOURS=10
 export MAX_RECOVERY_ATTEMPTS=5
+export MAX_RETRY_MINUTES=10
 export OUTPUT_DIR=/path/to/records
 export SECRET_DIR=/path/to/secrets
 export DATABASE_DIR=/path/to/database
