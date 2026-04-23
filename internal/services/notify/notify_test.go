@@ -116,7 +116,7 @@ func TestService_MemoryRisk_SubscribeUnsubscribeCycle(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	runtime.ReadMemStats(&after)
 
-	retainedMB := float64(after.Alloc-before.Alloc) / (1024 * 1024)
+	retainedMB := float64(int64(after.Alloc)-int64(before.Alloc)) / (1024 * 1024)
 	t.Logf("retained memory after %d cycles: %.2f MB", iterations, retainedMB)
 
 	const maxRetainedMB = 8.0
