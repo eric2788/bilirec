@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"sync/atomic"
 	"time"
 
 	"github.com/eric2788/bilirec/internal/modules/bilibili"
@@ -17,6 +16,7 @@ import (
 	"github.com/eric2788/bilirec/internal/services/convert"
 	"github.com/eric2788/bilirec/internal/services/stream"
 	"github.com/eric2788/bilirec/pkg/ds"
+	"github.com/eric2788/bilirec/pkg/flv"
 	"github.com/eric2788/bilirec/pkg/pipeline"
 	"github.com/eric2788/bilirec/utils"
 	"github.com/puzpuzpuz/xsync/v4"
@@ -45,20 +45,16 @@ var ErrRoomBanned = errors.New("the room is banned")
 var ErrRoomEncrypted = errors.New("the room is encrypted")
 var ErrInsufficientDiskSpace = errors.New("insufficient disk space")
 
-type Recorder struct {
-	status     atomic.Pointer[RecordStatus]
-	bytesRead  atomic.Uint64
-	startTime  time.Time
-	outputPath string
-
-	cancel context.CancelFunc
-}
+// error types to immediately cut recording without refetch stream url, such as flv header changed
+var ErrShouldCut = errors.Join(
+	processors.ErrVideoHeaderChanged,
+)
 
 type Service struct {
 	st            *stream.Service
 	cv            *convert.Service
 	bilic         *bilibili.Client
-	recording     *xsync.Map[int, *Recorder]
+	recording     *xsync.Map[int, *Info]
 	writtingFiles ds.Set[string]
 	pipes         *xsync.Map[int, *pipeline.Pipe[[]byte]]
 
@@ -80,7 +76,7 @@ func NewService(
 		st:            st,
 		cv:            cv,
 		bilic:         bilic,
-		recording:     xsync.NewMap[int, *Recorder](),
+		recording:     xsync.NewMap[int, *Info](),
 		writtingFiles: ds.NewSyncedSet[string](),
 		pipes:         xsync.NewMap[int, *pipeline.Pipe[[]byte]](),
 		cfg:           cfg,
@@ -139,12 +135,6 @@ func (r *Service) Start(roomId int) error {
 	}
 
 	now := time.Now()
-
-	outputPath, err := r.prepareFilePath(roomInfo, now)
-	if err != nil {
-		return fmt.Errorf("cannot prepare file path: %v", err)
-	}
-
 	ctx, cancel := context.WithCancel(r.ctx)
 
 	// retry mechanism
@@ -161,14 +151,12 @@ func (r *Service) Start(roomId int) error {
 		}
 
 		// initialize Recorder info
-		info := &Recorder{
-			cancel:     cancel,
-			startTime:  now,
-			outputPath: outputPath,
+		info := &Info{
+			cancel:    cancel,
+			startTime: now,
+			room:      roomInfo,
 		}
-		info.status.Store(recordingPtr)
-		r.writtingFiles.Add(filepath.Base(outputPath))
-
+		info.SetOutputPath("") // initialize output path to empty string to avoid potential nil pointer dereference in finalize()
 		return r.prepare(roomId, ch, ctx, info)
 	}
 	cancel()
@@ -195,61 +183,111 @@ func (r *Service) Stop(roomId int) bool {
 	return hasRecording
 }
 
-func (r *Service) prepare(roomId int, ch <-chan []byte, ctx context.Context, info *Recorder) error {
+func (r *Service) prepare(roomId int, ch <-chan []byte, ctx context.Context, info *Info) error {
 
-	pipe := pipeline.New(
-		// fix FLV stream
-		processors.NewFlvStreamFixer(),
-		// write to file with buffered writer
-		// flushes every 5 seconds then writes to disk
-		processors.NewBufferedStreamWriter(info.outputPath, config.ReadOnly.LiveStreamWriterBufferSize()),
-	)
-
-	startCtx, startCancel := context.WithTimeout(ctx, 10*time.Second)
-	if err := pipe.Open(startCtx); err != nil {
-		startCancel()
-		return fmt.Errorf("cannot open pipeline: %v", err)
-	}
-	startCancel()
-
+	info.status.Store(recordingPtr)
 	r.recording.Store(roomId, info)
-	r.pipes.Store(roomId, pipe)
 
-	go r.rev(roomId, ch, info, pipe)
+	go func() {
+		defer r.recover(roomId)
+		defer info.cancel()
+		err := r.rotate(roomId, ch, info, ctx)
+		if err != nil {
+			logger.Errorf("error rotating recording: %v", err)
+		}
+	}()
+
 	go r.checkRecordingDurationPeriodically(roomId, ctx)
 	return nil
 }
 
-func (r *Service) rev(roomId int, ch <-chan []byte, info *Recorder, pipe *pipeline.Pipe[[]byte]) {
+func (r *Service) rotate(roomId int, ch <-chan []byte, info *Info, ctx context.Context) error {
 	l := logger.WithField("room", roomId)
-	defer r.recover(roomId)
-	defer func() {
-		pipe.Close()
-		go r.finalize(roomId, info)
-	}()
-	for data := range ch {
+	segment := 0
+	// Keep one fixer instance across rotation so partial/raw alignment state is preserved.
+	sharedFixer := flv.NewRealtimeFixer()
+	defer sharedFixer.Close()
+	// videoHdr and audioHdr are nil for segment 0; populated from FlvHeaderChangedError on rotation.
+	var videoHdr, audioHdr []byte
+	for {
 
-		info.bytesRead.Add(uint64(len(data)))
-		result, err := pipe.Process(r.ctx, data)
-		r.st.Flush(data)
-		r.st.Flush(result)
-
+		outputPath, err := r.rotateFilePath(info, segment)
 		if err != nil {
-			l.Errorf("error writing data to file: %v", err)
-			if err == processors.ErrNotFlvFile {
+			return fmt.Errorf("cannot prepare file path: %v", err)
+		} else {
+			info.SetOutputPath(outputPath)
+		}
+
+		pipe := pipeline.New(
+			// fix FLV stream (shared fixer across segments)
+			processors.NewFlvStreamFixerWithFixer(sharedFixer),
+			// detect FLV header changes (e.g. due to stream quality changes) and trigger pipe rotation
+			processors.NewFlvHeaderSplitDetectorSeeded(videoHdr),
+			// emit FLV file header once per segment, with optional video/audio sequence-header tags
+			processors.NewFlvHeaderWriter(videoHdr, audioHdr),
+			// write to file with buffered writer, flushes every 5 seconds then writes to disk
+			processors.NewBufferedStreamWriter(info.OutputPath(), config.ReadOnly.LiveStreamWriterBufferSize()),
+		)
+
+		r.writtingFiles.Add(filepath.Base(info.OutputPath()))
+
+		startCtx, startCancel := context.WithTimeout(ctx, 10*time.Second)
+		if err := pipe.Open(startCtx); err != nil {
+			startCancel()
+			return fmt.Errorf("cannot open pipeline: %v", err)
+		}
+		startCancel()
+
+		r.pipes.Store(roomId, pipe)
+
+		err = r.rev(roomId, ch, info, ctx, pipe)
+		if err != nil {
+			var headerChanged *flv.FlvHeaderChangedError
+			if errors.As(err, &headerChanged) {
+				l.Info("rotating file due to video header change detected in stream")
+				videoHdr = headerChanged.VideoHeaderTag
+				audioHdr = headerChanged.AudioHeaderTag
+				// Before starting a new segment, reset the fixer's timestamp tracking
+				// so the new segment's timestamps start from 0 instead of continuing
+				// from the previous segment's time range.
+				sharedFixer.ResetTimestampStore()
+				segment++
+				continue
+			} else if err == processors.ErrNotFlvFile {
 				l.Warn("received FLV validation errors, stream may be unstable")
 				timer := time.NewTimer(5 * time.Second)
 				select {
 				case <-timer.C:
-					return
+					break
 				case <-r.ctx.Done():
 					timer.Stop()
-					return
+					break
 				}
+			} else {
+				l.Errorf("error writing data to file: %v", err)
 			}
-			return
+		}
+		break
+	}
+
+	return nil
+}
+
+func (r *Service) rev(roomId int, ch <-chan []byte, info *Info, ctx context.Context, pipe *pipeline.Pipe[[]byte]) error {
+	defer func() {
+		pipe.Close()
+		outputPath := info.OutputPath()
+		go r.finalize(roomId, outputPath)
+	}()
+	for data := range ch {
+		info.bytesRead.Add(uint64(len(data)))
+		_, err := pipe.Process(ctx, data)
+		r.st.Flush(data)
+		if err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func (r *Service) checkRecordingDurationPeriodically(roomId int, ctx context.Context) {
@@ -340,7 +378,7 @@ func (r *Service) recover(roomId int) {
 
 			l.Infof("will retry stream recovery in 15 seconds...")
 			timer := time.NewTimer(15 * time.Second)
-			
+
 			select {
 			case <-timer.C:
 				attempt++
@@ -355,22 +393,22 @@ func (r *Service) recover(roomId int) {
 	}
 }
 
-func (r *Service) finalize(roomId int, info *Recorder) {
-	if info == nil {
-		logger.Warnf("skipping finalize for room %d: no recording info", roomId)
+func (r *Service) finalize(roomId int, outputPath string) {
+	if outputPath == "" {
+		logger.Warnf("skipping finalize for room %d: output path is empty", roomId)
 		return
 	}
 
-	defer r.writtingFiles.Remove(filepath.Base(info.outputPath))
+	defer r.writtingFiles.Remove(filepath.Base(outputPath))
 
-	fileInfo, err := os.Stat(info.outputPath)
+	fileInfo, err := os.Stat(outputPath)
 	if err != nil {
 		logger.Errorf("failed to stat recorded file for room %d: %v", roomId, err)
 		return
 	} else if fileInfo.Size() < 1024 { // less than 1KB
 		logger.Warnf("recorded file for room %d is too small (%d bytes), skipping finallization and removing file", roomId, fileInfo.Size())
-		if err := os.Remove(info.outputPath); err != nil {
-			logger.Errorf("failed to remove empty file %s: %v", info.outputPath, err)
+		if err := os.Remove(outputPath); err != nil {
+			logger.Errorf("failed to remove empty file %s: %v", outputPath, err)
 		}
 		return
 	}
@@ -381,7 +419,7 @@ func (r *Service) finalize(roomId int, info *Recorder) {
 	}
 
 	// process finalization via convert service
-	if queue, err := r.cv.Enqueue(info.outputPath, "mp4", r.cfg.DeleteFlvAfterConvert); err != nil {
+	if queue, err := r.cv.Enqueue(outputPath, "mp4", r.cfg.DeleteFlvAfterConvert); err != nil {
 		logger.Errorf("failed to enqueue conversion for room %d: %v", roomId, err)
 		logger.Warnf("you may need to convert mp4 manually for room: %d", roomId)
 	} else {
@@ -431,13 +469,17 @@ func (r *Service) backgroundMaintenance(ctx context.Context) {
 }
 
 // the time should be the time you start the record, not live start
-func (r *Service) prepareFilePath(info *bilibili.LiveRoomInfoDetail, start time.Time) (string, error) {
-	dirPath := fmt.Sprintf("%s/%s-%d", r.cfg.OutputDir, info.Uname, info.RoomID)
+func (r *Service) rotateFilePath(info *Info, segment int) (string, error) {
+	dirPath := fmt.Sprintf("%s/%s-%d", r.cfg.OutputDir, info.room.Uname, info.room.RoomID)
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
 		return "", err
 	}
-	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.Title), 20)
-	return fmt.Sprintf("%s/%s-%s.flv", dirPath, safeTitle, start.Format("20060102_150405")), nil
+	safeTitle := utils.TruncateString(utils.SanitizeFilename(info.room.Title), 20)
+	if segment == 0 {
+		return fmt.Sprintf("%s/%s-%s.flv", dirPath, safeTitle, info.startTime.Format("20060102_150405")), nil
+	} else {
+		return fmt.Sprintf("%s/%s-%s-%d.flv", dirPath, safeTitle, info.startTime.Format("20060102_150405"), segment), nil
+	}
 }
 
 func initOutputDir(cfg *config.Config) {

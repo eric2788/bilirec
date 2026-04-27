@@ -48,7 +48,7 @@ func TestBufferedStreamWriter_MemoryLeak(t *testing.T) {
 		t.Fatalf("Failed to generate random data: %v", err)
 	}
 
-	t.Logf("📝 Starting to write %d chunks of %d KB each...", iterations, chunkSize/1024)
+	t.Logf("?? Starting to write %d chunks of %d KB each...", iterations, chunkSize/1024)
 	start := time.Now()
 
 	for i := 0; i < iterations; i++ {
@@ -65,14 +65,14 @@ func TestBufferedStreamWriter_MemoryLeak(t *testing.T) {
 	}
 
 	elapsed := time.Since(start)
-	t.Logf("✅ Write phase complete:  %d chunks in %v (%.2f MB/s)",
+	t.Logf("??Write phase complete:  %d chunks in %v (%.2f MB/s)",
 		iterations, elapsed, float64(iterations*chunkSize)/(1024*1024)/elapsed.Seconds())
 
 	// Read memory after write phase (before GC)
 	runtime.ReadMemStats(&m2)
 
 	// Phase 2: Force GC and wait for cleanup
-	t.Log("🧹 Running garbage collection...")
+	t.Log("? Running garbage collection...")
 	runtime.GC()
 	runtime.GC() // Double GC to ensure finalization
 	time.Sleep(500 * time.Millisecond)
@@ -94,7 +94,7 @@ func TestBufferedStreamWriter_MemoryLeak(t *testing.T) {
 	retainedAfterGC := afterGCAlloc - baselineAlloc
 	retainedAfterClose := afterCloseAlloc - baselineAlloc
 
-	t.Logf("📊 Memory Statistics:")
+	t.Logf("?? Memory Statistics:")
 	t.Logf("  Baseline:               %.2f MB", baselineAlloc)
 	t.Logf("  After write:           %.2f MB (growth: +%.2f MB)", afterWriteAlloc, peakGrowth)
 	t.Logf("  After GC:              %.2f MB (retained: +%.2f MB)", afterGCAlloc, retainedAfterGC)
@@ -110,11 +110,11 @@ func TestBufferedStreamWriter_MemoryLeak(t *testing.T) {
 
 	expectedSize := int64(iterations * chunkSize)
 	actualSize := stat.Size()
-	t.Logf("📁 File size: %.2f MB (expected: %.2f MB)",
+	t.Logf("?? File size: %.2f MB (expected: %.2f MB)",
 		float64(actualSize)/(1024*1024), float64(expectedSize)/(1024*1024))
 
 	if actualSize != expectedSize {
-		t.Errorf("❌ File size mismatch:  got %d bytes, expected %d bytes", actualSize, expectedSize)
+		t.Errorf("??File size mismatch:  got %d bytes, expected %d bytes", actualSize, expectedSize)
 	}
 
 	// Memory leak detection thresholds
@@ -127,25 +127,25 @@ func TestBufferedStreamWriter_MemoryLeak(t *testing.T) {
 
 	// Check for memory leaks
 	if retainedAfterGC > maxRetainedAfterGCMB {
-		t.Errorf("⚠️  Possible memory leak:  %.2f MB retained after GC (threshold: %.2f MB)",
+		t.Errorf("??  Possible memory leak:  %.2f MB retained after GC (threshold: %.2f MB)",
 			retainedAfterGC, maxRetainedAfterGCMB)
 	} else {
-		t.Logf("✅ Memory after GC is within acceptable range")
+		t.Logf("??Memory after GC is within acceptable range")
 	}
 
 	if retainedAfterClose > maxRetainedAfterCloseMB {
-		t.Errorf("⚠️  Possible memory leak: %.2f MB retained after close (threshold: %.2f MB)",
+		t.Errorf("??  Possible memory leak: %.2f MB retained after close (threshold: %.2f MB)",
 			retainedAfterClose, maxRetainedAfterCloseMB)
 	} else {
-		t.Logf("✅ Memory after close is within acceptable range")
+		t.Logf("??Memory after close is within acceptable range")
 	}
 
 	// Additional check:  Ensure GC actually reclaimed most memory
 	gcEfficiency := (afterWriteAlloc - afterGCAlloc) / peakGrowth * 100
-	t.Logf("📈 GC efficiency: %.1f%% of peak growth reclaimed", gcEfficiency)
+	t.Logf("?? GC efficiency: %.1f%% of peak growth reclaimed", gcEfficiency)
 
 	if gcEfficiency < 80.0 {
-		t.Errorf("⚠️  Low GC efficiency: only %.1f%% reclaimed (expected > 80%%)", gcEfficiency)
+		t.Errorf("??  Low GC efficiency: only %.1f%% reclaimed (expected > 80%%)", gcEfficiency)
 	}
 }
 
@@ -163,7 +163,7 @@ func TestBufferedStreamWriter_ConcurrentMemoryLeak(t *testing.T) {
 		chunkSize        = 128 * 1024 // 128 KB
 	)
 
-	t.Logf("🔀 Testing %d concurrent writers...", numGoroutines)
+	t.Logf("?? Testing %d concurrent writers...", numGoroutines)
 
 	done := make(chan bool, numGoroutines)
 
@@ -208,15 +208,15 @@ func TestBufferedStreamWriter_ConcurrentMemoryLeak(t *testing.T) {
 	afterWrite := float64(m2.Alloc) / (1024 * 1024)
 	afterGC := float64(m3.Alloc) / (1024 * 1024)
 
-	t.Logf("📊 Concurrent Memory Stats:")
+	t.Logf("?? Concurrent Memory Stats:")
 	t.Logf("  Baseline:    %.2f MB", baseline)
 	t.Logf("  After write: %.2f MB (growth: +%.2f MB)", afterWrite, afterWrite-baseline)
 	t.Logf("  After GC:     %.2f MB (retained: +%.2f MB)", afterGC, afterGC-baseline)
 
 	if (afterGC - baseline) > 15.0 {
-		t.Errorf("⚠️  Possible memory leak in concurrent scenario: %.2f MB retained", afterGC-baseline)
+		t.Errorf("??  Possible memory leak in concurrent scenario: %.2f MB retained", afterGC-baseline)
 	} else {
-		t.Logf("✅ Concurrent memory usage is acceptable")
+		t.Logf("??Concurrent memory usage is acceptable")
 	}
 }
 
@@ -253,7 +253,7 @@ func TestBufferedStreamWriter_LongRunningMemoryProfile(t *testing.T) {
 	memSamples := []float64{}
 	iterations := 0
 
-	t.Logf("⏱️  Running long-duration test for %v.. .", duration)
+	t.Logf("??  Running long-duration test for %v.. .", duration)
 
 	var m runtime.MemStats
 
@@ -279,7 +279,7 @@ sampleLoop:
 		}
 	}
 
-	t.Logf("✅ Processed %d chunks over %v", iterations, duration)
+	t.Logf("??Processed %d chunks over %v", iterations, duration)
 
 	// Analyze memory trend
 	if len(memSamples) > 2 {
@@ -287,16 +287,16 @@ sampleLoop:
 		secondHalf := average(memSamples[len(memSamples)/2:])
 		trend := secondHalf - firstHalf
 
-		t.Logf("📈 Memory trend analysis:")
+		t.Logf("?? Memory trend analysis:")
 		t.Logf("  First half avg:   %.2f MB", firstHalf)
 		t.Logf("  Second half avg: %.2f MB", secondHalf)
 		t.Logf("  Trend:           %+.2f MB", trend)
 
 		// If memory grows more than 20 MB over time, it's likely a leak
 		if trend > 20.0 {
-			t.Errorf("⚠️  Memory appears to be growing over time: +%.2f MB", trend)
+			t.Errorf("??  Memory appears to be growing over time: +%.2f MB", trend)
 		} else {
-			t.Logf("✅ Memory usage is stable over time")
+			t.Logf("??Memory usage is stable over time")
 		}
 	}
 }
@@ -351,7 +351,7 @@ func TestBufferedStreamWriter_NoReturnedDataLeak(t *testing.T) {
 	afterAlloc := float64(m2.Alloc) / (1024 * 1024)
 	finalAlloc := float64(m3.Alloc) / (1024 * 1024)
 
-	t.Logf("📊 Return value leak check:")
+	t.Logf("?? Return value leak check:")
 	t.Logf("  Baseline:  %.2f MB", baseAlloc)
 	t.Logf("  After:     %.2f MB", afterAlloc)
 	t.Logf("  Final:    %.2f MB", finalAlloc)
@@ -359,9 +359,9 @@ func TestBufferedStreamWriter_NoReturnedDataLeak(t *testing.T) {
 	// Most memory should be from pre-allocated chunks, which is expected
 	// After GC, we should see cleanup
 	if (finalAlloc - baseAlloc) > 10.0 {
-		t.Errorf("⚠️  Possible leak from returned data: %.2f MB retained", finalAlloc-baseAlloc)
+		t.Errorf("??  Possible leak from returned data: %.2f MB retained", finalAlloc-baseAlloc)
 	} else {
-		t.Logf("✅ No leak detected from returned data references")
+		t.Logf("??No leak detected from returned data references")
 	}
 }
 
